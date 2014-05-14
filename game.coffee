@@ -25,17 +25,21 @@ Game =
       key = x+","+y
       if not value
         freeCells.push key
-        @map[key] = "."
+      @map[key] =
+        val: if value then " " else "."
+        seen: no
     freeCells
 
-  drawMap : ->
+  drawMap : (onlySeen) ->
     for key of @map
       a = split key
-      @display.draw a.x, a.y, @map[key]
+      if @map[key].seen is yes or not onlySeen
+        @display.draw a.x, a.y, @map[key].val
 
   draw : ->
     # Draw player FOV and player
     @display.clear()
+    @drawMap yes
     @player.drawVisible()
     @display.draw @player.x, @player.y, '@'
 
@@ -76,7 +80,7 @@ Player::handleEvent = (e) ->
   newX = @x + dir[0]; newY = @y + dir[1]
   newKey = newX + "," + newY
 
-  return unless newKey of Game.map
+  return unless Game.map[newKey].val is "."
 
   @move newX, newY
   window.removeEventListener "keydown", this
@@ -88,7 +92,11 @@ Player::move = (newX, newY)->
 
 Player::drawVisible = ->
   map = Game.map
-  fov = new ROT.FOV.PreciseShadowcasting (x,y) -> return x+","+y of map
+  fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
+    return false unless map[x+","+y]
+    return map[x+","+y].val is "."
   fov.compute @x, @y, 10, (x, y, r, v) ->
-    color = if map[x+","+y] then "#aa0" else "#660"
-    Game.display.draw x, y, map[x+","+y], "#fff", color
+    return unless map[x+","+y]
+    map[x+","+y].seen = yes
+    color = if map[x+","+y].val is "." then "#aa0" else "#660"
+    Game.display.draw x, y, map[x+","+y].val, "#fff", color

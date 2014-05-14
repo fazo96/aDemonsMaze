@@ -30,23 +30,31 @@ Game = {
         key = x + "," + y;
         if (!value) {
           freeCells.push(key);
-          return _this.map[key] = ".";
         }
+        return _this.map[key] = {
+          val: value ? " " : ".",
+          seen: false
+        };
       };
     })(this));
     return freeCells;
   },
-  drawMap: function() {
+  drawMap: function(onlySeen) {
     var a, key, _results;
     _results = [];
     for (key in this.map) {
       a = split(key);
-      _results.push(this.display.draw(a.x, a.y, this.map[key]));
+      if (this.map[key].seen === true || !onlySeen) {
+        _results.push(this.display.draw(a.x, a.y, this.map[key].val));
+      } else {
+        _results.push(void 0);
+      }
     }
     return _results;
   },
   draw: function() {
     this.display.clear();
+    this.drawMap(true);
     this.player.drawVisible();
     return this.display.draw(this.player.x, this.player.y, '@');
   },
@@ -98,7 +106,7 @@ Player.prototype.handleEvent = function(e) {
   newX = this.x + dir[0];
   newY = this.y + dir[1];
   newKey = newX + "," + newY;
-  if (!(newKey in Game.map)) {
+  if (Game.map[newKey].val !== ".") {
     return;
   }
   this.move(newX, newY);
@@ -116,11 +124,18 @@ Player.prototype.drawVisible = function() {
   var fov, map;
   map = Game.map;
   fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
-    return x + "," + y in map;
+    if (!map[x + "," + y]) {
+      return false;
+    }
+    return map[x + "," + y].val === ".";
   });
   return fov.compute(this.x, this.y, 10, function(x, y, r, v) {
     var color;
-    color = map[x + "," + y] ? "#aa0" : "#660";
-    return Game.display.draw(x, y, map[x + "," + y], "#fff", color);
+    if (!map[x + "," + y]) {
+      return;
+    }
+    map[x + "," + y].seen = true;
+    color = map[x + "," + y].val === "." ? "#aa0" : "#660";
+    return Game.display.draw(x, y, map[x + "," + y].val, "#fff", color);
   });
 };
