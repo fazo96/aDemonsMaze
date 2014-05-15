@@ -21,32 +21,35 @@ Game =
   generateMap: ->
     digger = new ROT.Map.Digger()
     freeCells = []
-    digger.create (x,y,value) =>
+    digger.create (x,y,solid) =>
       key = x+","+y
-      if not value
+      if not solid
         freeCells.push key
       @map[key] =
-        val: if value then " " else "."
+        val: if solid then " " else "."
         seen: no
+        solid: solid
+        fg: if solid then "#000" else "#fff"
+        bg: if solid then "#444" else "#000"
     freeCells
 
   drawMap : (onlySeen) ->
     for key of @map
       a = split key
       if @map[key].seen is yes or not onlySeen
-        @display.draw a.x, a.y, @map[key].val
+        @display.draw a.x, a.y, @map[key].val, @map[key].fg, @map[key].bg
 
   draw : ->
     # Draw player FOV and player
     @display.clear()
     @drawMap yes
     @player.drawVisible()
-    @display.draw @player.x, @player.y, '@'
+    @display.draw @player.x, @player.y, '@', "#fff", "#aa0"
 
   getEmptyLocation: (freeCells)->
     index = Math.floor ROT.RNG.getUniform() * freeCells.length
     key = freeCells.splice(index,1)[0]
-    split(key)
+    split key
 
 
 split = (v) ->
@@ -80,7 +83,7 @@ Player::handleEvent = (e) ->
   newX = @x + dir[0]; newY = @y + dir[1]
   newKey = newX + "," + newY
 
-  return unless Game.map[newKey].val is "."
+  return unless not Game.map[newKey].solid
 
   @move newX, newY
   window.removeEventListener "keydown", this
@@ -94,9 +97,9 @@ Player::drawVisible = ->
   map = Game.map
   fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
     return false unless map[x+","+y]
-    return map[x+","+y].val is "."
+    not map[x+","+y].solid
   fov.compute @x, @y, 10, (x, y, r, v) ->
     return unless map[x+","+y]
     map[x+","+y].seen = yes
-    color = if map[x+","+y].val is "." then "#aa0" else "#660"
+    color = if map[x+","+y].solid then "#660" else "#aa0"
     Game.display.draw x, y, map[x+","+y].val, "#fff", color

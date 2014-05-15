@@ -25,15 +25,18 @@ Game = {
     digger = new ROT.Map.Digger();
     freeCells = [];
     digger.create((function(_this) {
-      return function(x, y, value) {
+      return function(x, y, solid) {
         var key;
         key = x + "," + y;
-        if (!value) {
+        if (!solid) {
           freeCells.push(key);
         }
         return _this.map[key] = {
-          val: value ? " " : ".",
-          seen: false
+          val: solid ? " " : ".",
+          seen: false,
+          solid: solid,
+          fg: solid ? "#000" : "#fff",
+          bg: solid ? "#444" : "#000"
         };
       };
     })(this));
@@ -45,7 +48,7 @@ Game = {
     for (key in this.map) {
       a = split(key);
       if (this.map[key].seen === true || !onlySeen) {
-        _results.push(this.display.draw(a.x, a.y, this.map[key].val));
+        _results.push(this.display.draw(a.x, a.y, this.map[key].val, this.map[key].fg, this.map[key].bg));
       } else {
         _results.push(void 0);
       }
@@ -56,7 +59,7 @@ Game = {
     this.display.clear();
     this.drawMap(true);
     this.player.drawVisible();
-    return this.display.draw(this.player.x, this.player.y, '@');
+    return this.display.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
   },
   getEmptyLocation: function(freeCells) {
     var index, key;
@@ -106,7 +109,7 @@ Player.prototype.handleEvent = function(e) {
   newX = this.x + dir[0];
   newY = this.y + dir[1];
   newKey = newX + "," + newY;
-  if (Game.map[newKey].val !== ".") {
+  if (!!Game.map[newKey].solid) {
     return;
   }
   this.move(newX, newY);
@@ -127,7 +130,7 @@ Player.prototype.drawVisible = function() {
     if (!map[x + "," + y]) {
       return false;
     }
-    return map[x + "," + y].val === ".";
+    return !map[x + "," + y].solid;
   });
   return fov.compute(this.x, this.y, 10, function(x, y, r, v) {
     var color;
@@ -135,7 +138,7 @@ Player.prototype.drawVisible = function() {
       return;
     }
     map[x + "," + y].seen = true;
-    color = map[x + "," + y].val === "." ? "#aa0" : "#660";
+    color = map[x + "," + y].solid ? "#660" : "#aa0";
     return Game.display.draw(x, y, map[x + "," + y].val, "#fff", color);
   });
 };
