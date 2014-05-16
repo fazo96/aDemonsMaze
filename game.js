@@ -30,17 +30,13 @@ Game = {
     return this.draw();
   },
   generateMap: function() {
-    var freeCells, room, _i, _len, _ref, _results;
+    var room, _i, _len, _ref, _results;
     this.map = {};
     this.digger = new ROT.Map.Digger();
-    freeCells = [];
     this.digger.create((function(_this) {
       return function(x, y, solid) {
         var key;
         key = x + "," + y;
-        if (!solid) {
-          freeCells.push(key);
-        }
         return _this.map[key] = {
           val: solid ? " " : ".",
           seen: false,

@@ -35,11 +35,8 @@ Game =
   generateMap: ->
     @map = {}
     @digger = new ROT.Map.Digger()
-    freeCells = []
     @digger.create (x,y,solid) =>
       key = x+","+y
-      if not solid
-        freeCells.push key
       @map[key] =
         val: if solid then " " else "."
         seen: no
