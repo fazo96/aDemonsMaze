@@ -77,12 +77,15 @@ Game =
     @player.drawVisible()
     @display.draw @player.x, @player.y, '@', "#fff", "#aa0"
 
+  # TODO: ONLY GET A LOCATION INSIDE A ROOM!!!
   getEmptyLocation: (freeCells)->
     #index = 3
     index = Math.floor ROT.RNG.getUniform() * freeCells.length
     key = split freeCells.splice(index,1)[0]
     #break unless player.x is key.x and player.y is key.y
     return key
+
+  # TODO: SEE UP
   getEmptyLoc: ->
     loop
       x = Math.floor ROT.RNG.getUniform() * Game.w
@@ -97,43 +100,63 @@ split = (v) ->
 Player = (x,y) ->
   @x = x
   @y = y
-  @lastKeycode = -1
+  @shiftDown = no
   @move @x, @y
+  @keyMap = {}
+  @keyMap[38] = 0
+  @keyMap[33] = 1
+  @keyMap[39] = 2
+  @keyMap[34] = 3
+  @keyMap[40] = 4
+  @keyMap[35] = 5
+  @keyMap[37] = 6
+  @keyMap[36] = 7
+  # Workaround for problem with removing listeners when functions are bound
+  @_onKeyUp = @onKeyUp.bind this
+  @_onKeyDown = @onKeyDown.bind this
+  window.addEventListener "keyup", @_onKeyUp
 
 Player::act = ->
   Game.engine.lock()
-  window.addEventListener "keydown", this
+  window.addEventListener "keydown", @_onKeyDown
 
-Player::handleEvent = (e) ->
-  keyMap = {}
-  keyMap[38] = 0
-  keyMap[33] = 1
-  keyMap[39] = 2
-  keyMap[34] = 3
-  keyMap[40] = 4
-  keyMap[35] = 5
-  keyMap[37] = 6
-  keyMap[36] = 7
+Player::onKeyUp = (e) ->
+  if e.keyCode is 16
+    @shiftDown = no
+    console.log "Shift UP"
+
+Player::onKeyDown = (e) ->
   console.log e.keyCode
-  if e.keyCode is 60 and @lastKeycode is 16 and Game.map[@x+","+@y].type is "stairs"
-    Game.newLevel()
-  if 36 <= e.keyCode <= 40
-    dir = ROT.DIRS[8][keyMap[e.keyCode]]
+  finished = no
+  # start actions --->
+  if e.keyCode is 16
+    @shiftDown = yes
+    console.log "Shift Down"
+  else
+  if e.keyCode is 60 and @shiftDown and Game.map[@x+","+@y].type is "stairs"
+    if Game.map[@x+","+@y].val is ">"
+      # Go downstairs
+      Game.newLevel()
+      finished = yes
+  else if 36 <= e.keyCode <= 40
+    # Direction Key
+    dir = ROT.DIRS[8][@keyMap[e.keyCode]]
     newX = @x + dir[0]; newY = @y + dir[1]
     newKey = newX + "," + newY
-
     # Move into non-solid space
     if not Game.map[newKey].solid
       @move newX, newY
-    # Open Door
+      finished = yes
+    # Move into door: Open it
     else if Game.map[newKey].type is "door"
       Game.map[newKey].val = "\'"
       Game.map[newKey].solid = no
-  @lastKeycode = e.keyCode
-  console.log "Last keycode: "+@lastKeycode
+      finished = yes
+  # <--- end actions
   Game.draw()
-  window.removeEventListener "keydown", this
-  Game.engine.unlock()
+  if finished
+    window.removeEventListener "keydown", @_onKeyDown
+    Game.engine.unlock()
 
 Player::move = (newX, newY)->
   @x = newX; @y = newY
@@ -146,4 +169,6 @@ Player::drawVisible = ->
   fov.compute @x, @y, 6, (x, y, r, v) ->
     return unless map[x+","+y]
     map[x+","+y].seen = yes
-    Game.display.draw x, y, map[x+","+y].val, map[x+","+y].fg_light, map[x+","+y].bg_light
+    Game.display.draw x, y, map[x+","+y].val,
+                            map[x+","+y].fg_light,
+                            map[x+","+y].bg_light

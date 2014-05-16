@@ -129,47 +129,68 @@ split = function(v) {
 Player = function(x, y) {
   this.x = x;
   this.y = y;
-  this.lastKeycode = -1;
-  return this.move(this.x, this.y);
+  this.shiftDown = false;
+  this.move(this.x, this.y);
+  this.keyMap = {};
+  this.keyMap[38] = 0;
+  this.keyMap[33] = 1;
+  this.keyMap[39] = 2;
+  this.keyMap[34] = 3;
+  this.keyMap[40] = 4;
+  this.keyMap[35] = 5;
+  this.keyMap[37] = 6;
+  this.keyMap[36] = 7;
+  this._onKeyUp = this.onKeyUp.bind(this);
+  this._onKeyDown = this.onKeyDown.bind(this);
+  return window.addEventListener("keyup", this._onKeyUp);
 };
 
 Player.prototype.act = function() {
   Game.engine.lock();
-  return window.addEventListener("keydown", this);
+  return window.addEventListener("keydown", this._onKeyDown);
 };
 
-Player.prototype.handleEvent = function(e) {
-  var dir, keyMap, newKey, newX, newY, _ref;
-  keyMap = {};
-  keyMap[38] = 0;
-  keyMap[33] = 1;
-  keyMap[39] = 2;
-  keyMap[34] = 3;
-  keyMap[40] = 4;
-  keyMap[35] = 5;
-  keyMap[37] = 6;
-  keyMap[36] = 7;
-  console.log(e.keyCode);
-  if (e.keyCode === 60 && this.lastKeycode === 16 && Game.map[this.x + "," + this.y].type === "stairs") {
-    Game.newLevel();
+Player.prototype.onKeyUp = function(e) {
+  if (e.keyCode === 16) {
+    this.shiftDown = false;
+    return console.log("Shift UP");
   }
-  if ((36 <= (_ref = e.keyCode) && _ref <= 40)) {
-    dir = ROT.DIRS[8][keyMap[e.keyCode]];
+};
+
+Player.prototype.onKeyDown = function(e) {
+  var dir, finished, newKey, newX, newY, _ref;
+  console.log(e.keyCode);
+  finished = false;
+  if (e.keyCode === 16) {
+    this.shiftDown = true;
+    console.log("Shift Down");
+  } else {
+
+  }
+  if (e.keyCode === 60 && this.shiftDown && Game.map[this.x + "," + this.y].type === "stairs") {
+    if (Game.map[this.x + "," + this.y].val === ">") {
+      Game.newLevel();
+      finished = true;
+    }
+  } else if ((36 <= (_ref = e.keyCode) && _ref <= 40)) {
+    dir = ROT.DIRS[8][this.keyMap[e.keyCode]];
     newX = this.x + dir[0];
     newY = this.y + dir[1];
     newKey = newX + "," + newY;
     if (!Game.map[newKey].solid) {
       this.move(newX, newY);
+      finished = true;
     } else if (Game.map[newKey].type === "door") {
       Game.map[newKey].val = "\'";
       Game.map[newKey].solid = false;
+      finished = true;
     }
   }
-  this.lastKeycode = e.keyCode;
-  console.log("Last keycode: " + this.lastKeycode);
   Game.draw();
-  window.removeEventListener("keydown", this);
-  return Game.engine.unlock();
+  if (finished) {
+    window.removeEventListener("keydown", this._onKeyDown);
+    return Game.engine.unlock();
+  }
 };
 
 Player.prototype.move = function(newX, newY) {
