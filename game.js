@@ -1,43 +1,68 @@
-var Game, Player, split;
+var Game, Player;
 
 Game = {
   display: null,
+  engine: null,
   w: 80,
   h: 25,
-  engine: null,
   scheduler: null,
   player: null,
+  maps: [],
   init: function() {
     console.log("Experimenting with rot.js ...");
     this.display = new ROT.Display();
     document.body.appendChild(this.display.getContainer());
     this.scheduler = new ROT.Scheduler.Simple();
     this.engine = new ROT.Engine(this.scheduler);
-    this.newLevel();
+    this.newLevel(0);
+    this.engine.start();
     return console.log("Done init");
   },
-  newLevel: function() {
-    var freeCells, loc;
-    freeCells = this.generateMap();
-    loc = this.getEmptyLoc();
-    this.scheduler.remove(this.player);
-    this.player = new Player(loc.x, loc.y);
-    this.scheduler.add(this.player, true);
-    loc = this.getEmptyLoc();
-    this.map[loc.x + "," + loc.y].type = "stairs";
-    this.map[loc.x + "," + loc.y].val = ">";
-    this.engine.start();
+  newLevel: function(l, putUpStairs) {
+    var loc, loc2, up;
+    up = putUpStairs || false;
+    this.level = l;
+    console.log("Level: " + this.level);
+    if (this.maps[this.level] !== void 0) {
+      console.log("Level " + this.level + " already exists!");
+    } else {
+      this.generateMap(this.level);
+      loc = this.getEmptyLoc();
+      if (up) {
+        this.map(loc.x, loc.y).type = "stairs";
+        this.map(loc.x, loc.y).val = "<";
+      }
+      if (this.player === void 0 || this.player === null) {
+        this.player = new Player(loc.x, loc.y);
+        this.scheduler.add(this.player, true);
+      }
+      loc2 = this.getEmptyLoc();
+      while (loc2.x === loc.x && loc2.y === loc.y) {
+        loc2 = this.getEmptyLoc();
+      }
+      this.map(loc2.x, loc2.y).type = "stairs";
+      this.map(loc2.x, loc2.y).val = ">";
+    }
+    if (this.player.pos[this.level] !== void 0) {
+      this.player.x = this.player.pos[this.level].x;
+      this.player.y = this.player.pos[this.level].y;
+    } else {
+      this.player.x = loc.x;
+      this.player.y = loc.y;
+    }
     return this.draw();
   },
-  generateMap: function() {
-    var room, _i, _len, _ref, _results;
-    this.map = {};
+  generateMap: function(l) {
+    var i, room, _ref;
+    this.map_done = false;
+    this.rooms_done = false;
+    this.maps[l] = {};
     this.digger = new ROT.Map.Digger();
     this.digger.create((function(_this) {
       return function(x, y, solid) {
         var key;
         key = x + "," + y;
-        return _this.map[key] = {
+        _this.maps[l][key] = {
           val: solid ? " " : ".",
           seen: false,
           type: solid ? "wall" : "floor",
@@ -47,31 +72,47 @@ Game = {
           fg_light: solid ? "#000" : "#fff",
           bg_light: solid ? "#660" : "#aa0"
         };
+        if (x === _this.w - 1 && y === _this.h - 1) {
+          return _this.map_done = true;
+        }
       };
     })(this));
+    return;
     _ref = this.digger.getRooms();
-    _results = [];
-    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      room = _ref[_i];
-      _results.push(room.getDoors((function(_this) {
+    for (i in _ref) {
+      room = _ref[i];
+      console.log(room.getDoors);
+      room.getDoors((function(_this) {
         return function(x, y) {
-          _this.map[x + "," + y].val = "+";
-          _this.map[x + "," + y].type = "door";
-          _this.map[x + "," + y].fg = "#3a261a";
-          _this.map[x + "," + y].block = true;
-          return _this.map[x + "," + y].fg_light = "#584338";
+          var k;
+          k = x + "," + y;
+          _this.maps[l][k].val = "+";
+          _this.maps[l][k].type = "door";
+          _this.maps[l][k].fg = "#3a261a";
+          _this.maps[l][k].block = true;
+          return _this.maps[l][k].fg_light = "#584338";
         };
-      })(this)));
+      })(this));
+      if (i === this.digger.getRooms().length - 1) {
+        this.rooms_done = true;
+      }
     }
-    return _results;
+    while (true) {
+      if (this.rooms_done === true && this.map_done === true) {
+        break;
+      }
+    }
+    return console.log("Done map!");
+  },
+  map: function(x, y) {
+    return this.maps[this.level][x + "," + y];
   },
   drawMap: function(onlySeen) {
-    var a, key, _results;
+    var key, _results;
     _results = [];
-    for (key in this.map) {
-      a = split(key);
-      if (this.map[key].seen === true || !onlySeen) {
-        _results.push(this.display.draw(a.x, a.y, this.map[key].val, this.map[key].fg, this.map[key].bg));
+    for (key in this.maps[this.level]) {
+      if (this.maps[this.level][key].seen === true || !onlySeen) {
+        _results.push(this.display.draw(key.split(",")[0], key.split(",")[1], this.maps[this.level][key].val, this.maps[this.level][key].fg, this.maps[this.level][key].bg));
       } else {
         _results.push(void 0);
       }
@@ -79,8 +120,11 @@ Game = {
     return _results;
   },
   draw: function() {
+    if (!this.map_done) {
+      return;
+    }
     this.display.clear();
-    this.drawMap(false);
+    this.drawMap(true);
     this.player.drawVisible();
     return this.display.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
   },
@@ -89,8 +133,11 @@ Game = {
     if (!this.digger) {
       return;
     }
-    rs = this.digger.getRooms();
-    room = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
+    room = void 0;
+    while (room === void 0) {
+      rs = this.digger.getRooms();
+      room = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
+    }
     x = room.getLeft();
     +Math.floor(ROT.RNG.getUniform() * (room.getRight() - room.getLeft()));
     y = room.getTop();
@@ -102,22 +149,12 @@ Game = {
   }
 };
 
-split = function(v) {
-  var parts, x, y;
-  parts = v.split(",");
-  x = parseInt(parts[0]);
-  y = parseInt(parts[1]);
-  return {
-    x: x,
-    y: y
-  };
-};
-
 Player = function(x, y) {
   this.x = x;
   this.y = y;
   this.shiftDown = false;
   this.move(this.x, this.y);
+  this.pos = {};
   this.keyMap = {};
   this.keyMap[38] = 0;
   this.keyMap[33] = 1;
@@ -139,41 +176,49 @@ Player.prototype.act = function() {
 
 Player.prototype.onKeyUp = function(e) {
   if (e.keyCode === 16) {
-    this.shiftDown = false;
-    return console.log("Shift UP");
+    return this.shiftDown = false;
   }
 };
 
 Player.prototype.onKeyDown = function(e) {
-  var dir, finished, newKey, newX, newY, _ref;
-  console.log(e.keyCode);
+  var dir, finished, newX, newY, _ref;
   finished = false;
   if (e.keyCode === 16) {
     this.shiftDown = true;
-    console.log("Shift Down");
   } else {
 
   }
-  if (e.keyCode === 60 && this.shiftDown && Game.map[this.x + "," + this.y].type === "stairs") {
-    if (Game.map[this.x + "," + this.y].val === ">") {
-      Game.newLevel();
+  if (e.keyCode === 60 && Game.map(this.x, this.y).type === "stairs") {
+    if (Game.map(this.x, this.y).val === ">" && this.shiftDown) {
+      this.pos[Game.level] = {
+        x: this.x,
+        y: this.y
+      };
+      Game.newLevel(--Game.level, true);
+      finished = true;
+    } else if (Game.map(this.x, this.y).val === "<") {
+      this.pos[Game.level] = {
+        x: this.x,
+        y: this.y
+      };
+      Game.newLevel(++Game.level);
       finished = true;
     }
   } else if ((36 <= (_ref = e.keyCode) && _ref <= 40)) {
     dir = ROT.DIRS[8][this.keyMap[e.keyCode]];
     newX = this.x + dir[0];
     newY = this.y + dir[1];
-    newKey = newX + "," + newY;
-    if (Game.map[newKey].block === false) {
+    if (Game.map(newX, newY).block === false) {
       this.move(newX, newY);
+      Game.draw();
       finished = true;
-    } else if (Game.map[newKey].type === "door") {
-      Game.map[newKey].val = "\'";
-      Game.map[newKey].block = false;
+    } else if (Game.map(newX, newY).type === "door") {
+      Game.map(newX, newY).val = "\'";
+      Game.map(newX, newY).block = false;
+      Game.draw();
       finished = true;
     }
   }
-  Game.draw();
   if (finished) {
     window.removeEventListener("keydown", this._onKeyDown);
     return Game.engine.unlock();
@@ -185,20 +230,39 @@ Player.prototype.move = function(newX, newY) {
   return this.y = newY;
 };
 
+Player.prototype.drawMemory = function() {
+  var x, y, _i, _ref, _results;
+  _results = [];
+  for (x = _i = 0, _ref = Game.w; 0 <= _ref ? _i <= _ref : _i >= _ref; x = 0 <= _ref ? ++_i : --_i) {
+    _results.push((function() {
+      var _j, _ref1, _results1;
+      _results1 = [];
+      for (y = _j = 0, _ref1 = Game.h; 0 <= _ref1 ? _j <= _ref1 : _j >= _ref1; y = 0 <= _ref1 ? ++_j : --_j) {
+        if (Game.map(x, y).seen === true) {
+          _results1.push(Game.display.draw(x, y, Game.map(x, y).val, Game.map(x, y).fg, Game.map(x, y).bg));
+        } else {
+          _results1.push(void 0);
+        }
+      }
+      return _results1;
+    })());
+  }
+  return _results;
+};
+
 Player.prototype.drawVisible = function() {
-  var fov, map;
-  map = Game.map;
+  var fov;
   fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
-    if (!map[x + "," + y]) {
+    if (!Game.map(x, y)) {
       return false;
     }
-    return map[x + "," + y].block !== true;
+    return Game.map(x, y).block !== true;
   });
   return fov.compute(this.x, this.y, 6, function(x, y, r, v) {
-    if (!map[x + "," + y]) {
+    if (!Game.map(x, y)) {
       return;
     }
-    map[x + "," + y].seen = true;
-    return Game.display.draw(x, y, map[x + "," + y].val, map[x + "," + y].fg_light, map[x + "," + y].bg_light);
+    Game.map(x, y).seen = true;
+    return Game.display.draw(x, y, Game.map(x, y).val, Game.map(x, y).fg_light, Game.map(x, y).bg_light);
   });
 };
