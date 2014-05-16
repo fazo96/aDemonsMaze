@@ -1,6 +1,5 @@
 Game =
   display: null
-  map: {}
   w: 80
   h: 25
   engine: null
@@ -19,14 +18,14 @@ Game =
 
   newLevel: ->
     # Map
-    @map = {}
     freeCells = @generateMap()
     # Player
-    loc = @getEmptyLocation freeCells
+    loc = @getEmptyLoc()
+    @scheduler.remove @player
     @player = new Player loc.x, loc.y
     @scheduler.add @player, yes
     # Stairs
-    loc = @getEmptyLocation freeCells
+    loc = @getEmptyLoc()
     @map[loc.x+","+loc.y].type = "stairs"
     @map[loc.x+","+loc.y].val = ">"
     # Start
@@ -34,9 +33,10 @@ Game =
     @draw()
 
   generateMap: ->
-    digger = new ROT.Map.Digger()
+    @map = {}
+    @digger = new ROT.Map.Digger()
     freeCells = []
-    digger.create (x,y,solid) =>
+    @digger.create (x,y,solid) =>
       key = x+","+y
       if not solid
         freeCells.push key
@@ -44,25 +44,18 @@ Game =
         val: if solid then " " else "."
         seen: no
         type: if solid then "wall" else "floor"
-        solid: solid
+        block: if solid then yes else no
         fg: if solid then "#000" else "#fff"
         bg: if solid then "#444" else "#000"
         fg_light: if solid then "#000" else "#fff"
         bg_light: if solid then "#660" else "#aa0"
-    for room in digger.getRooms()
+    for room in @digger.getRooms()
       room.getDoors (x,y) =>
         @map[x+","+y].val = "+"
         @map[x+","+y].type = "door"
         @map[x+","+y].fg = "#3a261a"
-        @map[x+","+y].solid = yes
+        @map[x+","+y].block = yes
         @map[x+","+y].fg_light = "#584338"
-    ###
-    console.log "a"
-    loc = getEmptyLocation freeCells
-    @map[loc.x+","+loc.y].type = "stairs"
-    @map[loc.x+","+loc.y].val = ">"
-    ###
-    freeCells
 
   drawMap : (onlySeen) ->
     for key of @map
@@ -73,24 +66,19 @@ Game =
   draw : ->
     # Draw player FOV and player
     @display.clear()
-    @drawMap yes
+    @drawMap no
     @player.drawVisible()
     @display.draw @player.x, @player.y, '@', "#fff", "#aa0"
 
-  # TODO: ONLY GET A LOCATION INSIDE A ROOM!!!
-  getEmptyLocation: (freeCells)->
-    #index = 3
-    index = Math.floor ROT.RNG.getUniform() * freeCells.length
-    key = split freeCells.splice(index,1)[0]
-    #break unless player.x is key.x and player.y is key.y
-    return key
-
-  # TODO: SEE UP
   getEmptyLoc: ->
-    loop
-      x = Math.floor ROT.RNG.getUniform() * Game.w
-      y = Math.floor ROT.RNG.getUniform() * Game.h
-      return {x,y} if map[x+","+y].type is "floor"
+    return unless @digger
+    rs = @digger.getRooms()
+    room = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
+    x = room.getLeft()
+    + Math.floor ROT.RNG.getUniform() * (room.getRight() - room.getLeft())
+    y = room.getTop()
+    + Math.floor ROT.RNG.getUniform() * (room.getBottom() - room.getTop())
+    return {x,y}
 
 split = (v) ->
   parts = v.split ","
@@ -144,13 +132,13 @@ Player::onKeyDown = (e) ->
     newX = @x + dir[0]; newY = @y + dir[1]
     newKey = newX + "," + newY
     # Move into non-solid space
-    if not Game.map[newKey].solid
+    if Game.map[newKey].block is no
       @move newX, newY
       finished = yes
     # Move into door: Open it
     else if Game.map[newKey].type is "door"
       Game.map[newKey].val = "\'"
-      Game.map[newKey].solid = no
+      Game.map[newKey].block = no
       finished = yes
   # <--- end actions
   Game.draw()
@@ -165,7 +153,7 @@ Player::drawVisible = ->
   map = Game.map
   fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
     return false unless map[x+","+y]
-    not map[x+","+y].solid
+    map[x+","+y].block isnt true
   fov.compute @x, @y, 6, (x, y, r, v) ->
     return unless map[x+","+y]
     map[x+","+y].seen = yes
