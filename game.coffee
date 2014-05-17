@@ -3,7 +3,6 @@ Array::delete = (o) ->
 
 Game =
   display: null
-  engine: null
   w: 80
   h: 25
   screen_w: 80
@@ -18,11 +17,10 @@ Game =
     # Init
     @display = new ROT.Display()
     document.body.appendChild @display.getContainer()
-    @scheduler = new ROT.Scheduler.Simple()
-    @engine = new ROT.Engine @scheduler
+    @scheduler = new ROT.Scheduler.Action()
     @level = 0
     @newLevel 0
-    @engine.start()
+    @scheduler.next().act()
     console.log "Done init"
 
   newLevel: (l,moveTo) ->
@@ -34,20 +32,20 @@ Game =
       console.log "Generating Level: "+l
       # Generate map
       @generateMap l
-      loc = @getEmptyLoc()
+      loc = @getEmptyLoc no
       if oldLevel isnt l
         @map(loc.x,loc.y).type = "stairs"
         @map(loc.x,loc.y).val = if oldLevel > l then "<" else ">"
         console.log "Placed "+@map(loc.x,loc.y).val+" tile"
       if @player is undefined or @player is null
         @player = new Player loc.x, loc.y
-        @scheduler.add @player, yes
+        @scheduler.add @player, yes, 0
       # Stairs
-      loc2 = @getEmptyLoc()
-      while loc2.x is loc.x and loc2.y is loc.y
-        loc2 = @getEmptyLoc()
+      loc2 = @getEmptyLoc yes
+      #while loc2.x is loc.x and loc2.y is loc.y
+        #loc2 = @getEmptyLoc yes
       @map(loc2.x,loc2.y).type = "stairs"
-      @map(loc2.x,loc2.y).val = ">"
+      @map(loc2.x,loc2.y).val = if oldLevel > l then ">" else "<"
     else console.log "Loading Level: "+l
     if @player.pos[l] isnt undefined
       @player.x = @player.pos[l].x
@@ -58,9 +56,9 @@ Game =
     if not @monsters[l]
       @monsters[l] = []
       times = Math.floor(ROT.RNG.getUniform() * 5)
-      console.log "Generating "+times+" monsters on floor "+l
+      console.log "Generating " + (times+1) + " monsters on floor "+l
       for i in [1..times]
-        loc = @getEmptyLoc()
+        loc = @getEmptyLoc yes
         @monsters[l].push new Monster(loc.x, loc.y, l)
     if moveTo # Change level
       console.log "Player moving to level "+l
@@ -68,7 +66,7 @@ Game =
       if @monsters[oldLevel]
         @scheduler.remove monster for monster in @monsters[oldLevel]
       # Enter new monsters' AI
-      @scheduler.add monster, yes for monster in @monsters[l]
+      @scheduler.add monster, yes, 50 for monster in @monsters[l]
     @draw()
 
   generateMap: (l) ->
@@ -133,12 +131,18 @@ Game =
     #for monster in @monsters[@level]
       #@display.draw monster.x, monster.y, 'M', "#fff", "#000"
 
-  getEmptyLoc: ->
+  inRoom : (room, x, y) ->
+    if room then room.x1 <= x <= room.x2 and room.y1 <= y <= room.y2 else no
+
+  getEmptyLoc: (awayFromPlayer)->
+    awayFromPlayer = awayFromPlayer or no
     return unless @digger
-    r = undefined
-    while r is undefined
+    r = undefined; ok = yes
+    while r is undefined or ok is no
       rs = @digger.getRooms()
       r = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
+      if awayFromPlayer is off or not @inRoom(r,@player.x,@player.y)
+        ok = yes
     x = r.getLeft()
     + Math.floor ROT.RNG.getUniform() * (r.getRight() - r.getLeft())
     y = r.getTop()
@@ -166,7 +170,6 @@ Player = (x,y) ->
   window.addEventListener "keyup", @_onKeyUp
 
 Player::act = ->
-  Game.engine.lock()
   window.addEventListener "keydown", @_onKeyDown
 
 Player::onKeyUp = (e) ->
@@ -191,6 +194,7 @@ Player::onKeyDown = (e) ->
       @pos[Game.level] = { x: @x, y: @y }
       Game.newLevel Game.level + 1
       finished = yes
+    if finished is yes then Game.scheduler.setDuration 5
   else if 36 <= e.keyCode <= 40
     # Direction Key
     dir = ROT.DIRS[8][@keyMap[e.keyCode]]
@@ -205,16 +209,18 @@ Player::onKeyDown = (e) ->
         Game.map(newX,newY).val = "\'"
         Game.map(newX,newY).block = no
         Game.draw(); finished = yes
+    if finished is yes then Game.scheduler.setDuration 10
     # Open Space
     if Game.map(newX,newY).block is no and finished is no
       @move newX, newY
       Game.draw()
       finished = yes
+      if finished is yes then Game.scheduler.setDuration 5
   if e.keyCode isnt 67 then @closeDoor = no
   # <--- end actions
-  if finished
+  if finished is yes or yes
     window.removeEventListener "keydown", @_onKeyDown
-    Game.engine.unlock()
+    Game.scheduler.next().act()
 
 Player::move = (newX, newY)->
   @x = newX; @y = newY
@@ -249,31 +255,30 @@ Monster = (x,y,level) ->
 
 Monster::act = ->
   return unless @z is Game.level
-  Game.engine.lock()
   if not @fov
     @fov = new ROT.FOV.PreciseShadowcasting Game.passable
   # Player seen behaviour
-  @fov.compute @x, @y, 3, (x, y, r, v) =>
+  @fov.compute @x, @y, 8, (x, y, r, v) =>
     return unless Game.map(x,y)
     if Game.player.x is x and Game.player.y is y
       # Last known player position
-      console.log "HA! Found player"
       @p_x = Game.player.x; @p_y = Game.player.y
   if @p_x is no and @p_y is no
     # Standard behaviour: player has escaped or has not been found
     dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)]
     @move(@x+dir[0],@y+dir[1])
+    Game.scheduler.setDuration 20
   else # Move towards known player position
-    console.log "I'll get you player!"
     path = new ROT.Path.AStar @p_x, @p_y, (x,y) ->
-      console.log "YA"
       Game.passable x, y
-    path.compute @x, @y, (x,y) =>
-      @move x, y
-  Game.engine.unlock()
+    tx = @x; ty = @y # workaround, it works and it's efficient! I hope...
+    path.compute tx, ty, (x,y) =>
+      if Math.abs(tx-x) < 2 and Math.abs(ty-y) < 2
+        @move x, y
+    Game.scheduler.setDuration 15
+  Game.scheduler.next().act()
 
 Monster::move = (x,y) ->
-  #console.log "Monster trying to move to "+x+" "+y
   return unless Game.map(x,y)
   if Math.abs(@x-x) < 2 and Math.abs(@y-y) < 2 and Game.map(x,y).block isnt yes
     @x = x; @y = y

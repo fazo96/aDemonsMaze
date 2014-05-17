@@ -6,7 +6,6 @@ Array.prototype["delete"] = function(o) {
 
 Game = {
   display: null,
-  engine: null,
   w: 80,
   h: 25,
   screen_w: 80,
@@ -19,11 +18,10 @@ Game = {
     console.log("Experimenting with rot.js ...");
     this.display = new ROT.Display();
     document.body.appendChild(this.display.getContainer());
-    this.scheduler = new ROT.Scheduler.Simple();
-    this.engine = new ROT.Engine(this.scheduler);
+    this.scheduler = new ROT.Scheduler.Action();
     this.level = 0;
     this.newLevel(0);
-    this.engine.start();
+    this.scheduler.next().act();
     return console.log("Done init");
   },
   newLevel: function(l, moveTo) {
@@ -36,7 +34,7 @@ Game = {
     if (this.maps[l] === void 0) {
       console.log("Generating Level: " + l);
       this.generateMap(l);
-      loc = this.getEmptyLoc();
+      loc = this.getEmptyLoc(false);
       if (oldLevel !== l) {
         this.map(loc.x, loc.y).type = "stairs";
         this.map(loc.x, loc.y).val = oldLevel > l ? "<" : ">";
@@ -44,14 +42,11 @@ Game = {
       }
       if (this.player === void 0 || this.player === null) {
         this.player = new Player(loc.x, loc.y);
-        this.scheduler.add(this.player, true);
+        this.scheduler.add(this.player, true, 0);
       }
-      loc2 = this.getEmptyLoc();
-      while (loc2.x === loc.x && loc2.y === loc.y) {
-        loc2 = this.getEmptyLoc();
-      }
+      loc2 = this.getEmptyLoc(true);
       this.map(loc2.x, loc2.y).type = "stairs";
-      this.map(loc2.x, loc2.y).val = ">";
+      this.map(loc2.x, loc2.y).val = oldLevel > l ? ">" : "<";
     } else {
       console.log("Loading Level: " + l);
     }
@@ -65,9 +60,9 @@ Game = {
     if (!this.monsters[l]) {
       this.monsters[l] = [];
       times = Math.floor(ROT.RNG.getUniform() * 5);
-      console.log("Generating " + times + " monsters on floor " + l);
+      console.log("Generating " + (times + 1) + " monsters on floor " + l);
       for (i = _i = 1; 1 <= times ? _i <= times : _i >= times; i = 1 <= times ? ++_i : --_i) {
-        loc = this.getEmptyLoc();
+        loc = this.getEmptyLoc(true);
         this.monsters[l].push(new Monster(loc.x, loc.y, l));
       }
     }
@@ -83,7 +78,7 @@ Game = {
       _ref1 = this.monsters[l];
       for (_k = 0, _len1 = _ref1.length; _k < _len1; _k++) {
         monster = _ref1[_k];
-        this.scheduler.add(monster, true);
+        this.scheduler.add(monster, true, 50);
       }
     }
     return this.draw();
@@ -171,15 +166,27 @@ Game = {
     this.player.drawVisible();
     return this.display.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
   },
-  getEmptyLoc: function() {
-    var r, rs, x, y;
+  inRoom: function(room, x, y) {
+    if (room) {
+      return (room.x1 <= x && x <= room.x2) && (room.y1 <= y && y <= room.y2);
+    } else {
+      return false;
+    }
+  },
+  getEmptyLoc: function(awayFromPlayer) {
+    var ok, r, rs, x, y;
+    awayFromPlayer = awayFromPlayer || false;
     if (!this.digger) {
       return;
     }
     r = void 0;
-    while (r === void 0) {
+    ok = true;
+    while (r === void 0 || ok === false) {
       rs = this.digger.getRooms();
       r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
+      if (awayFromPlayer === false || !this.inRoom(r, this.player.x, this.player.y)) {
+        ok = true;
+      }
     }
     x = r.getLeft();
     +Math.floor(ROT.RNG.getUniform() * (r.getRight() - r.getLeft()));
@@ -214,7 +221,6 @@ Player = function(x, y) {
 };
 
 Player.prototype.act = function() {
-  Game.engine.lock();
   return window.addEventListener("keydown", this._onKeyDown);
 };
 
@@ -248,6 +254,9 @@ Player.prototype.onKeyDown = function(e) {
       Game.newLevel(Game.level + 1);
       finished = true;
     }
+    if (finished === true) {
+      Game.scheduler.setDuration(5);
+    }
   } else if ((36 <= (_ref = e.keyCode) && _ref <= 40)) {
     dir = ROT.DIRS[8][this.keyMap[e.keyCode]];
     newX = this.x + dir[0];
@@ -265,18 +274,24 @@ Player.prototype.onKeyDown = function(e) {
         finished = true;
       }
     }
+    if (finished === true) {
+      Game.scheduler.setDuration(10);
+    }
     if (Game.map(newX, newY).block === false && finished === false) {
       this.move(newX, newY);
       Game.draw();
       finished = true;
+      if (finished === true) {
+        Game.scheduler.setDuration(5);
+      }
     }
   }
   if (e.keyCode !== 67) {
     this.closeDoor = false;
   }
-  if (finished) {
+  if (finished === true || true) {
     window.removeEventListener("keydown", this._onKeyDown);
-    return Game.engine.unlock();
+    return Game.scheduler.next().act();
   }
 };
 
@@ -339,21 +354,19 @@ Monster = function(x, y, level) {
 };
 
 Monster.prototype.act = function() {
-  var dir, path;
+  var dir, path, tx, ty;
   if (this.z !== Game.level) {
     return;
   }
-  Game.engine.lock();
   if (!this.fov) {
     this.fov = new ROT.FOV.PreciseShadowcasting(Game.passable);
   }
-  this.fov.compute(this.x, this.y, 3, (function(_this) {
+  this.fov.compute(this.x, this.y, 8, (function(_this) {
     return function(x, y, r, v) {
       if (!Game.map(x, y)) {
         return;
       }
       if (Game.player.x === x && Game.player.y === y) {
-        console.log("HA! Found player");
         _this.p_x = Game.player.x;
         return _this.p_y = Game.player.y;
       }
@@ -362,19 +375,23 @@ Monster.prototype.act = function() {
   if (this.p_x === false && this.p_y === false) {
     dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)];
     this.move(this.x + dir[0], this.y + dir[1]);
+    Game.scheduler.setDuration(20);
   } else {
-    console.log("I'll get you player!");
     path = new ROT.Path.AStar(this.p_x, this.p_y, function(x, y) {
-      console.log("YA");
       return Game.passable(x, y);
     });
-    path.compute(this.x, this.y, (function(_this) {
+    tx = this.x;
+    ty = this.y;
+    path.compute(tx, ty, (function(_this) {
       return function(x, y) {
-        return _this.move(x, y);
+        if (Math.abs(tx - x) < 2 && Math.abs(ty - y) < 2) {
+          return _this.move(x, y);
+        }
       };
     })(this));
+    Game.scheduler.setDuration(15);
   }
-  return Game.engine.unlock();
+  return Game.scheduler.next().act();
 };
 
 Monster.prototype.move = function(x, y) {
