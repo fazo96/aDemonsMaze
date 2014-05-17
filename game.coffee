@@ -108,6 +108,11 @@ Game =
   map : (x,y) ->
     @maps[@level][x+","+y]
 
+  passable: (x,y) ->
+    # Not using "this" to avoid ugly scope problems. Sometimes I hate js
+    return no unless Game.map(x,y)
+    not Game.map(x,y).block
+
   drawMap : (onlySeen) ->
     onlySeen = onlySeen or no
     for key of @maps[@level]
@@ -224,9 +229,7 @@ Player::drawMemory = ->
 
 Player::drawVisible = ->
   if not @fov
-    @fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
-      return false unless Game.map(x,y)
-      Game.map(x,y).block isnt true
+    @fov = new ROT.FOV.PreciseShadowcasting Game.passable
   @fov.compute @x, @y, 6, (x, y, r, v) ->
     return unless Game.map(x,y)
     Game.map(x,y).seen = yes
@@ -242,12 +245,38 @@ Player::drawVisible = ->
 
 Monster = (x,y,level) ->
   @x = x; @y = y; @z = level
+  @p_x = no; @p_y = no
 
 Monster::act = ->
   return unless @z is Game.level
-  dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)]
-  @move(@x+dir[0],@y+dir[1])
+  Game.engine.lock()
+  if not @fov
+    @fov = new ROT.FOV.PreciseShadowcasting Game.passable
+  # Player seen behaviour
+  @fov.compute @x, @y, 3, (x, y, r, v) =>
+    return unless Game.map(x,y)
+    if Game.player.x is x and Game.player.y is y
+      # Last known player position
+      console.log "HA! Found player"
+      @p_x = Game.player.x; @p_y = Game.player.y
+  if @p_x is no and @p_y is no
+    # Standard behaviour: player has escaped or has not been found
+    dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)]
+    @move(@x+dir[0],@y+dir[1])
+  else # Move towards known player position
+    console.log "I'll get you player!"
+    path = new ROT.Path.AStar @p_x, @p_y, (x,y) ->
+      console.log "YA"
+      Game.passable x, y
+    path.compute @x, @y, (x,y) =>
+      @move x, y
+  Game.engine.unlock()
 
 Monster::move = (x,y) ->
-  if Game.map(x,y) and Game.map(x,y).block isnt yes
+  #console.log "Monster trying to move to "+x+" "+y
+  return unless Game.map(x,y)
+  if Math.abs(@x-x) < 2 and Math.abs(@y-y) < 2 and Game.map(x,y).block isnt yes
     @x = x; @y = y
+    # If I get to player's last known position and he's not there..
+    if @x is @p_x and @y is @p_y
+      @p_x = no; @p_y = no

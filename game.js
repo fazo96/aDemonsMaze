@@ -143,6 +143,12 @@ Game = {
   map: function(x, y) {
     return this.maps[this.level][x + "," + y];
   },
+  passable: function(x, y) {
+    if (!Game.map(x, y)) {
+      return false;
+    }
+    return !Game.map(x, y).block;
+  },
   drawMap: function(onlySeen) {
     var key, _results;
     onlySeen = onlySeen || false;
@@ -301,12 +307,7 @@ Player.prototype.drawMemory = function() {
 
 Player.prototype.drawVisible = function() {
   if (!this.fov) {
-    this.fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
-      if (!Game.map(x, y)) {
-        return false;
-      }
-      return Game.map(x, y).block !== true;
-    });
+    this.fov = new ROT.FOV.PreciseShadowcasting(Game.passable);
   }
   return this.fov.compute(this.x, this.y, 6, function(x, y, r, v) {
     var monster, _i, _len, _ref, _results;
@@ -332,21 +333,60 @@ Player.prototype.drawVisible = function() {
 Monster = function(x, y, level) {
   this.x = x;
   this.y = y;
-  return this.z = level;
+  this.z = level;
+  this.p_x = false;
+  return this.p_y = false;
 };
 
 Monster.prototype.act = function() {
-  var dir;
+  var dir, path;
   if (this.z !== Game.level) {
     return;
   }
-  dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)];
-  return this.move(this.x + dir[0], this.y + dir[1]);
+  Game.engine.lock();
+  if (!this.fov) {
+    this.fov = new ROT.FOV.PreciseShadowcasting(Game.passable);
+  }
+  this.fov.compute(this.x, this.y, 3, (function(_this) {
+    return function(x, y, r, v) {
+      if (!Game.map(x, y)) {
+        return;
+      }
+      if (Game.player.x === x && Game.player.y === y) {
+        console.log("HA! Found player");
+        _this.p_x = Game.player.x;
+        return _this.p_y = Game.player.y;
+      }
+    };
+  })(this));
+  if (this.p_x === false && this.p_y === false) {
+    dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)];
+    this.move(this.x + dir[0], this.y + dir[1]);
+  } else {
+    console.log("I'll get you player!");
+    path = new ROT.Path.AStar(this.p_x, this.p_y, function(x, y) {
+      console.log("YA");
+      return Game.passable(x, y);
+    });
+    path.compute(this.x, this.y, (function(_this) {
+      return function(x, y) {
+        return _this.move(x, y);
+      };
+    })(this));
+  }
+  return Game.engine.unlock();
 };
 
 Monster.prototype.move = function(x, y) {
-  if (Game.map(x, y) && Game.map(x, y).block !== true) {
+  if (!Game.map(x, y)) {
+    return;
+  }
+  if (Math.abs(this.x - x) < 2 && Math.abs(this.y - y) < 2 && Game.map(x, y).block !== true) {
     this.x = x;
-    return this.y = y;
+    this.y = y;
+    if (this.x === this.p_x && this.y === this.p_y) {
+      this.p_x = false;
+      return this.p_y = false;
+    }
   }
 };
