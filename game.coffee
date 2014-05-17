@@ -23,9 +23,7 @@ Game =
     # Map
     @level = l
     console.log "Level: "+@level
-    if @maps[@level] isnt undefined
-      console.log "Level " + @level + " already exists!"
-    else
+    if @maps[@level] is undefined
       # Generate map
       @generateMap @level
       loc = @getEmptyLoc()
@@ -49,10 +47,10 @@ Game =
     @draw()
 
   generateMap: (l) ->
-    @map_done = no; @rooms_done = no
+    @map_done = no; @rooms_done = no; times = 0
     @maps[l] = {}
     @digger = new ROT.Map.Digger()
-    @digger.create (x,y,solid) =>
+    finished = @digger.create (x,y,solid) =>
       key = x+","+y
       @maps[l][key] =
         val: if solid then " " else "."
@@ -63,12 +61,14 @@ Game =
         bg: if solid then "#444" else "#000"
         fg_light: if solid then "#000" else "#fff"
         bg_light: if solid then "#660" else "#aa0"
-      @map_done = yes if x is @w-1 and y is @h-1
+      times++
+      if times is @w*@h
+        @map_done = yes
+        console.log "[Map:"+l+"] Generated structure"
 
-    #loop return unless not @map_done
-    return
+    console.log "[Map:"+l+"] Finalizing map..."
     for i,room of @digger.getRooms()
-      console.log room.getDoors
+      continue unless room.getDoors
       room.getDoors (x,y) =>
         k = x+","+y
         @maps[l][k].val = "+"
@@ -77,10 +77,8 @@ Game =
         @maps[l][k].block = yes
         @maps[l][k].fg_light = "#584338"
       @rooms_done = yes if i is @digger.getRooms().length - 1
+    console.log "[Map:"+l+"] Finished"
 
-    loop
-      if @rooms_done is yes and @map_done is yes then break
-    console.log "Done map!"
 
   map : (x,y) ->
     @maps[@level][x+","+y]
@@ -116,7 +114,7 @@ Game =
 Player = (x,y) ->
   @x = x
   @y = y
-  @shiftDown = no
+  @shiftDown = no; @closeDoor = no
   @move @x, @y
   @pos = {}
   @keyMap = {}
@@ -142,18 +140,19 @@ Player::onKeyUp = (e) ->
     @shiftDown = no
 
 Player::onKeyDown = (e) ->
-  finished = no
+  finished = no;
   # start actions --->
-  if e.keyCode is 16
+  if e.keyCode is 16 #Shift
     @shiftDown = yes
-  else
+  else if e.keyCode is 67 # c
+    @closeDoor = yes
   if e.keyCode is 60 and Game.map(@x,@y).type is "stairs"
     if Game.map(@x,@y).val is ">" and @shiftDown
       # Go downstairs
       @pos[Game.level] = { x: @x, y: @y }
       Game.newLevel --Game.level, yes
       finished = yes
-    else if Game.map(@x,@y).val is "<"
+    else if Game.map(@x,@y).val is "<" and not @shiftDown
       # Go upstairs
       @pos[Game.level] = { x: @x, y: @y }
       Game.newLevel ++Game.level
@@ -162,17 +161,22 @@ Player::onKeyDown = (e) ->
     # Direction Key
     dir = ROT.DIRS[8][@keyMap[e.keyCode]]
     newX = @x + dir[0]; newY = @y + dir[1]
-    # Move into non-solid space
-    if Game.map(newX,newY).block is no
+    # Door: open or close
+    if Game.map(newX,newY).type is "door"
+      if @closeDoor is yes and Game.map(newX,newY).block is no
+        Game.map(newX,newY).val = "+"
+        Game.map(newX,newY).block = yes
+        Game.draw(); finished = yes
+      else if @closeDoor is no and Game.map(newX,newY).val is "+"
+        Game.map(newX,newY).val = "\'"
+        Game.map(newX,newY).block = no
+        Game.draw(); finished = yes
+    # Open Space
+    if Game.map(newX,newY).block is no and finished is no
       @move newX, newY
       Game.draw()
       finished = yes
-    # Move into door: Open it
-    else if Game.map(newX,newY).type is "door"
-      Game.map(newX,newY).val = "\'"
-      Game.map(newX,newY).block = no
-      Game.draw()
-      finished = yes
+  if e.keyCode isnt 67 then @closeDoor = no
   # <--- end actions
   if finished
     window.removeEventListener "keydown", @_onKeyDown
