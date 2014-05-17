@@ -15,9 +15,12 @@ Game = {
   maps: [],
   monsters: [],
   init: function() {
-    console.log("Experimenting with rot.js ...");
+    console.log("A Demon's Maze - WIP");
+    if (ROT.isSupported() === false) {
+      document.getElementById("gameContainer").innerHTML = "<h3>Oh! Your browser does not support HTML5 Canvas!</h3>\n<p>Try Firefox or Chrome!</p>";
+    }
     this.display = new ROT.Display();
-    document.body.appendChild(this.display.getContainer());
+    document.getElementById("gameContainer").appendChild(this.display.getContainer());
     this.scheduler = new ROT.Scheduler.Action();
     this.level = 0;
     this.newLevel(0);
@@ -184,7 +187,7 @@ Game = {
     while (r === void 0 || ok === false) {
       rs = this.digger.getRooms();
       r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
-      if (awayFromPlayer === false || !this.inRoom(r, this.player.x, this.player.y)) {
+      if (awayFromPlayer === false || !r || this.inRoom(r, this.player.x, this.player.y) === true) {
         ok = true;
       }
     }

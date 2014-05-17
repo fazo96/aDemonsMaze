@@ -13,10 +13,15 @@ Game =
   monsters: []
 
   init: ->
-    console.log "Experimenting with rot.js ..."
+    console.log "A Demon's Maze - WIP"
+    if ROT.isSupported() is no
+      document.getElementById("gameContainer").innerHTML = """
+      <h3>Oh! Your browser does not support HTML5 Canvas!</h3>
+      <p>Try Firefox or Chrome!</p>
+      """
     # Init
     @display = new ROT.Display()
-    document.body.appendChild @display.getContainer()
+    document.getElementById("gameContainer").appendChild @display.getContainer()
     @scheduler = new ROT.Scheduler.Action()
     @level = 0
     @newLevel 0
@@ -141,7 +146,7 @@ Game =
     while r is undefined or ok is no
       rs = @digger.getRooms()
       r = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
-      if awayFromPlayer is off or not @inRoom(r,@player.x,@player.y)
+      if awayFromPlayer is off or not r or @inRoom(r,@player.x,@player.y) is yes
         ok = yes
     x = r.getLeft()
     + Math.floor ROT.RNG.getUniform() * (r.getRight() - r.getLeft())
