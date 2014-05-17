@@ -66,7 +66,7 @@ Game = {
           seen: false,
           type: solid ? "wall" : "floor",
           block: solid ? true : false,
-          fg: solid ? "#000" : "#fff",
+          fg: solid ? "#000" : "#777",
           bg: solid ? "#444" : "#000",
           fg_light: solid ? "#000" : "#fff",
           bg_light: solid ? "#660" : "#aa0"
@@ -107,9 +107,12 @@ Game = {
   },
   drawMap: function(onlySeen) {
     var key, _results;
+    if (!onlySeen) {
+      onlySeen = false;
+    }
     _results = [];
     for (key in this.maps[this.level]) {
-      if (this.maps[this.level][key].seen === true || !onlySeen) {
+      if (this.maps[this.level][key].seen === true || onlySeen === false) {
         _results.push(this.display.draw(key.split(",")[0], key.split(",")[1], this.maps[this.level][key].val, this.maps[this.level][key].fg, this.maps[this.level][key].bg));
       } else {
         _results.push(void 0);
@@ -122,7 +125,7 @@ Game = {
       return;
     }
     this.display.clear();
-    this.drawMap(true);
+    this.player.drawMemory();
     this.player.drawVisible();
     return this.display.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
   },
@@ -243,11 +246,11 @@ Player.prototype.move = function(newX, newY) {
 Player.prototype.drawMemory = function() {
   var x, y, _i, _ref, _results;
   _results = [];
-  for (x = _i = 0, _ref = Game.w; 0 <= _ref ? _i <= _ref : _i >= _ref; x = 0 <= _ref ? ++_i : --_i) {
+  for (x = _i = 0, _ref = Game.w - 1; 0 <= _ref ? _i <= _ref : _i >= _ref; x = 0 <= _ref ? ++_i : --_i) {
     _results.push((function() {
       var _j, _ref1, _results1;
       _results1 = [];
-      for (y = _j = 0, _ref1 = Game.h; 0 <= _ref1 ? _j <= _ref1 : _j >= _ref1; y = 0 <= _ref1 ? ++_j : --_j) {
+      for (y = _j = 0, _ref1 = Game.h - 1; 0 <= _ref1 ? _j <= _ref1 : _j >= _ref1; y = 0 <= _ref1 ? ++_j : --_j) {
         if (Game.map(x, y).seen === true) {
           _results1.push(Game.display.draw(x, y, Game.map(x, y).val, Game.map(x, y).fg, Game.map(x, y).bg));
         } else {

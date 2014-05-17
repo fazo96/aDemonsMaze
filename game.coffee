@@ -57,7 +57,7 @@ Game =
         seen: no
         type: if solid then "wall" else "floor"
         block: if solid then yes else no
-        fg: if solid then "#000" else "#fff"
+        fg: if solid then "#000" else "#777"
         bg: if solid then "#444" else "#000"
         fg_light: if solid then "#000" else "#fff"
         bg_light: if solid then "#660" else "#aa0"
@@ -84,18 +84,19 @@ Game =
     @maps[@level][x+","+y]
 
   drawMap : (onlySeen) ->
+    if not onlySeen then onlySeen = no
     for key of @maps[@level]
-      if @maps[@level][key].seen is yes or not onlySeen
+      if @maps[@level][key].seen is yes or onlySeen is no
         @display.draw key.split(",")[0], key.split(",")[1],
           @maps[@level][key].val, @maps[@level][key].fg, @maps[@level][key].bg
 
   draw : ->
     if not @map_done
+      # Map has to be finished
       return
-    # Draw player FOV and player
     @display.clear()
-    @drawMap yes
-    #@player.drawMemory()
+    # Draw player FOV and player
+    @player.drawMemory()
     @player.drawVisible()
     @display.draw @player.x, @player.y, '@', "#fff", "#aa0"
 
@@ -186,8 +187,8 @@ Player::move = (newX, newY)->
   @x = newX; @y = newY
 
 Player::drawMemory = ->
-  for x in [0..Game.w]
-    for y in [0..Game.h]
+  for x in [0..Game.w-1]
+    for y in [0..Game.h-1]
       if Game.map(x,y).seen is true
         Game.display.draw x, y, Game.map(x,y).val,
                                 Game.map(x,y).fg,
