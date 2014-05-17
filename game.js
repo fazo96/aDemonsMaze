@@ -1,34 +1,46 @@
-var Game, Player;
+var Game, Monster, Player;
+
+Array.prototype["delete"] = function(o) {
+  return this.splice(this.indexOf(o), 1);
+};
 
 Game = {
   display: null,
   engine: null,
   w: 80,
   h: 25,
+  screen_w: 80,
+  screen_h: 25,
   scheduler: null,
   player: null,
   maps: [],
+  monsters: [],
   init: function() {
     console.log("Experimenting with rot.js ...");
     this.display = new ROT.Display();
     document.body.appendChild(this.display.getContainer());
     this.scheduler = new ROT.Scheduler.Simple();
     this.engine = new ROT.Engine(this.scheduler);
+    this.level = 0;
     this.newLevel(0);
     this.engine.start();
     return console.log("Done init");
   },
-  newLevel: function(l, putUpStairs) {
-    var loc, loc2, up;
-    up = putUpStairs || false;
-    this.level = l;
-    console.log("Level: " + this.level);
-    if (this.maps[this.level] === void 0) {
-      this.generateMap(this.level);
+  newLevel: function(l, moveTo) {
+    var i, loc, loc2, monster, oldLevel, times, _i, _j, _k, _len, _len1, _ref, _ref1;
+    moveTo = moveTo || true;
+    oldLevel = this.level;
+    if (moveTo === true) {
+      this.level = l;
+    }
+    if (this.maps[l] === void 0) {
+      console.log("Generating Level: " + l);
+      this.generateMap(l);
       loc = this.getEmptyLoc();
-      if (up) {
+      if (oldLevel !== l) {
         this.map(loc.x, loc.y).type = "stairs";
-        this.map(loc.x, loc.y).val = "<";
+        this.map(loc.x, loc.y).val = oldLevel > l ? "<" : ">";
+        console.log("Placed " + this.map(loc.x, loc.y).val + " tile");
       }
       if (this.player === void 0 || this.player === null) {
         this.player = new Player(loc.x, loc.y);
@@ -40,13 +52,39 @@ Game = {
       }
       this.map(loc2.x, loc2.y).type = "stairs";
       this.map(loc2.x, loc2.y).val = ">";
+    } else {
+      console.log("Loading Level: " + l);
     }
-    if (this.player.pos[this.level] !== void 0) {
-      this.player.x = this.player.pos[this.level].x;
-      this.player.y = this.player.pos[this.level].y;
+    if (this.player.pos[l] !== void 0) {
+      this.player.x = this.player.pos[l].x;
+      this.player.y = this.player.pos[l].y;
     } else {
       this.player.x = loc.x;
       this.player.y = loc.y;
+    }
+    if (!this.monsters[l]) {
+      this.monsters[l] = [];
+      times = Math.floor(ROT.RNG.getUniform() * 5);
+      console.log("Generating " + times + " monsters on floor " + l);
+      for (i = _i = 1; 1 <= times ? _i <= times : _i >= times; i = 1 <= times ? ++_i : --_i) {
+        loc = this.getEmptyLoc();
+        this.monsters[l].push(new Monster(loc.x, loc.y, l));
+      }
+    }
+    if (moveTo) {
+      console.log("Player moving to level " + l);
+      if (this.monsters[oldLevel]) {
+        _ref = this.monsters[oldLevel];
+        for (_j = 0, _len = _ref.length; _j < _len; _j++) {
+          monster = _ref[_j];
+          this.scheduler.remove(monster);
+        }
+      }
+      _ref1 = this.monsters[l];
+      for (_k = 0, _len1 = _ref1.length; _k < _len1; _k++) {
+        monster = _ref1[_k];
+        this.scheduler.add(monster, true);
+      }
     }
     return this.draw();
   },
@@ -107,9 +145,7 @@ Game = {
   },
   drawMap: function(onlySeen) {
     var key, _results;
-    if (!onlySeen) {
-      onlySeen = false;
-    }
+    onlySeen = onlySeen || false;
     _results = [];
     for (key in this.maps[this.level]) {
       if (this.maps[this.level][key].seen === true || onlySeen === false) {
@@ -130,19 +166,19 @@ Game = {
     return this.display.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
   },
   getEmptyLoc: function() {
-    var room, rs, x, y;
+    var r, rs, x, y;
     if (!this.digger) {
       return;
     }
-    room = void 0;
-    while (room === void 0) {
+    r = void 0;
+    while (r === void 0) {
       rs = this.digger.getRooms();
-      room = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
+      r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
     }
-    x = room.getLeft();
-    +Math.floor(ROT.RNG.getUniform() * (room.getRight() - room.getLeft()));
-    y = room.getTop();
-    +Math.floor(ROT.RNG.getUniform() * (room.getBottom() - room.getTop()));
+    x = r.getLeft();
+    +Math.floor(ROT.RNG.getUniform() * (r.getRight() - r.getLeft()));
+    y = r.getTop();
+    +Math.floor(ROT.RNG.getUniform() * (r.getBottom() - r.getTop()));
     return {
       x: x,
       y: y
@@ -196,14 +232,14 @@ Player.prototype.onKeyDown = function(e) {
         x: this.x,
         y: this.y
       };
-      Game.newLevel(--Game.level, true);
+      Game.newLevel(Game.level - 1);
       finished = true;
     } else if (Game.map(this.x, this.y).val === "<" && !this.shiftDown) {
       this.pos[Game.level] = {
         x: this.x,
         y: this.y
       };
-      Game.newLevel(++Game.level);
+      Game.newLevel(Game.level + 1);
       finished = true;
     }
   } else if ((36 <= (_ref = e.keyCode) && _ref <= 40)) {
@@ -264,18 +300,53 @@ Player.prototype.drawMemory = function() {
 };
 
 Player.prototype.drawVisible = function() {
-  var fov;
-  fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
-    if (!Game.map(x, y)) {
-      return false;
-    }
-    return Game.map(x, y).block !== true;
-  });
-  return fov.compute(this.x, this.y, 6, function(x, y, r, v) {
+  if (!this.fov) {
+    this.fov = new ROT.FOV.PreciseShadowcasting(function(x, y) {
+      if (!Game.map(x, y)) {
+        return false;
+      }
+      return Game.map(x, y).block !== true;
+    });
+  }
+  return this.fov.compute(this.x, this.y, 6, function(x, y, r, v) {
+    var monster, _i, _len, _ref, _results;
     if (!Game.map(x, y)) {
       return;
     }
     Game.map(x, y).seen = true;
-    return Game.display.draw(x, y, Game.map(x, y).val, Game.map(x, y).fg_light, Game.map(x, y).bg_light);
+    Game.display.draw(x, y, Game.map(x, y).val, Game.map(x, y).fg_light, Game.map(x, y).bg_light);
+    _ref = Game.monsters[Game.level];
+    _results = [];
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      monster = _ref[_i];
+      if (monster.x === x && monster.y === y) {
+        _results.push(Game.display.draw(x, y, "M", Game.map(x, y).fg_light, Game.map(x, y).bg_light));
+      } else {
+        _results.push(void 0);
+      }
+    }
+    return _results;
   });
+};
+
+Monster = function(x, y, level) {
+  this.x = x;
+  this.y = y;
+  return this.z = level;
+};
+
+Monster.prototype.act = function() {
+  var dir;
+  if (this.z !== Game.level) {
+    return;
+  }
+  dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)];
+  return this.move(this.x + dir[0], this.y + dir[1]);
+};
+
+Monster.prototype.move = function(x, y) {
+  if (Game.map(x, y) && Game.map(x, y).block !== true) {
+    this.x = x;
+    return this.y = y;
+  }
 };

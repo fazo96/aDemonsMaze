@@ -1,11 +1,17 @@
+Array::delete = (o) ->
+  @splice @indexOf(o), 1
+
 Game =
   display: null
   engine: null
   w: 80
   h: 25
+  screen_w: 80
+  screen_h: 25
   scheduler: null
   player: null
   maps: []
+  monsters: []
 
   init: ->
     console.log "Experimenting with rot.js ..."
@@ -14,22 +20,25 @@ Game =
     document.body.appendChild @display.getContainer()
     @scheduler = new ROT.Scheduler.Simple()
     @engine = new ROT.Engine @scheduler
+    @level = 0
     @newLevel 0
     @engine.start()
     console.log "Done init"
 
-  newLevel: (l,putUpStairs) ->
-    up = putUpStairs or no
+  newLevel: (l,moveTo) ->
+    moveTo = moveTo or yes
+    oldLevel = @level
     # Map
-    @level = l
-    console.log "Level: "+@level
-    if @maps[@level] is undefined
+    @level = l if moveTo is yes
+    if @maps[l] is undefined
+      console.log "Generating Level: "+l
       # Generate map
-      @generateMap @level
+      @generateMap l
       loc = @getEmptyLoc()
-      if up
+      if oldLevel isnt l
         @map(loc.x,loc.y).type = "stairs"
-        @map(loc.x,loc.y).val = "<"
+        @map(loc.x,loc.y).val = if oldLevel > l then "<" else ">"
+        console.log "Placed "+@map(loc.x,loc.y).val+" tile"
       if @player is undefined or @player is null
         @player = new Player loc.x, loc.y
         @scheduler.add @player, yes
@@ -39,11 +48,27 @@ Game =
         loc2 = @getEmptyLoc()
       @map(loc2.x,loc2.y).type = "stairs"
       @map(loc2.x,loc2.y).val = ">"
-    if @player.pos[@level] isnt undefined
-      @player.x = @player.pos[@level].x
-      @player.y = @player.pos[@level].y
+    else console.log "Loading Level: "+l
+    if @player.pos[l] isnt undefined
+      @player.x = @player.pos[l].x
+      @player.y = @player.pos[l].y
     else
       @player.x = loc.x; @player.y = loc.y
+    # Generate Monsters
+    if not @monsters[l]
+      @monsters[l] = []
+      times = Math.floor(ROT.RNG.getUniform() * 5)
+      console.log "Generating "+times+" monsters on floor "+l
+      for i in [1..times]
+        loc = @getEmptyLoc()
+        @monsters[l].push new Monster(loc.x, loc.y, l)
+    if moveTo # Change level
+      console.log "Player moving to level "+l
+      # Stop old monsters' AI for now
+      if @monsters[oldLevel]
+        @scheduler.remove monster for monster in @monsters[oldLevel]
+      # Enter new monsters' AI
+      @scheduler.add monster, yes for monster in @monsters[l]
     @draw()
 
   generateMap: (l) ->
@@ -84,7 +109,7 @@ Game =
     @maps[@level][x+","+y]
 
   drawMap : (onlySeen) ->
-    if not onlySeen then onlySeen = no
+    onlySeen = onlySeen or no
     for key of @maps[@level]
       if @maps[@level][key].seen is yes or onlySeen is no
         @display.draw key.split(",")[0], key.split(",")[1],
@@ -99,17 +124,20 @@ Game =
     @player.drawMemory()
     @player.drawVisible()
     @display.draw @player.x, @player.y, '@', "#fff", "#aa0"
+    # Draw Monsters
+    #for monster in @monsters[@level]
+      #@display.draw monster.x, monster.y, 'M', "#fff", "#000"
 
   getEmptyLoc: ->
     return unless @digger
-    room = undefined
-    while room is undefined
+    r = undefined
+    while r is undefined
       rs = @digger.getRooms()
-      room = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
-    x = room.getLeft()
-    + Math.floor ROT.RNG.getUniform() * (room.getRight() - room.getLeft())
-    y = room.getTop()
-    + Math.floor ROT.RNG.getUniform() * (room.getBottom() - room.getTop())
+      r = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
+    x = r.getLeft()
+    + Math.floor ROT.RNG.getUniform() * (r.getRight() - r.getLeft())
+    y = r.getTop()
+    + Math.floor ROT.RNG.getUniform() * (r.getBottom() - r.getTop())
     return {x,y}
 
 Player = (x,y) ->
@@ -141,9 +169,9 @@ Player::onKeyUp = (e) ->
     @shiftDown = no
 
 Player::onKeyDown = (e) ->
-  finished = no;
+  finished = no
   # start actions --->
-  if e.keyCode is 16 #Shift
+  if e.keyCode is 16 # Shift
     @shiftDown = yes
   else if e.keyCode is 67 # c
     @closeDoor = yes
@@ -151,12 +179,12 @@ Player::onKeyDown = (e) ->
     if Game.map(@x,@y).val is ">" and @shiftDown
       # Go downstairs
       @pos[Game.level] = { x: @x, y: @y }
-      Game.newLevel --Game.level, yes
+      Game.newLevel Game.level - 1
       finished = yes
     else if Game.map(@x,@y).val is "<" and not @shiftDown
       # Go upstairs
       @pos[Game.level] = { x: @x, y: @y }
-      Game.newLevel ++Game.level
+      Game.newLevel Game.level + 1
       finished = yes
   else if 36 <= e.keyCode <= 40
     # Direction Key
@@ -195,12 +223,31 @@ Player::drawMemory = ->
                                 Game.map(x,y).bg
 
 Player::drawVisible = ->
-  fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
-    return false unless Game.map(x,y)
-    Game.map(x,y).block isnt true
-  fov.compute @x, @y, 6, (x, y, r, v) ->
+  if not @fov
+    @fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
+      return false unless Game.map(x,y)
+      Game.map(x,y).block isnt true
+  @fov.compute @x, @y, 6, (x, y, r, v) ->
     return unless Game.map(x,y)
     Game.map(x,y).seen = yes
     Game.display.draw x, y, Game.map(x,y).val,
                             Game.map(x,y).fg_light,
                             Game.map(x,y).bg_light
+    # Check for Monsters
+    for monster in Game.monsters[Game.level]
+      if monster.x is x and monster.y is y
+        Game.display.draw x, y, "M",
+          Game.map(x,y).fg_light,
+          Game.map(x,y).bg_light
+
+Monster = (x,y,level) ->
+  @x = x; @y = y; @z = level
+
+Monster::act = ->
+  return unless @z is Game.level
+  dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)]
+  @move(@x+dir[0],@y+dir[1])
+
+Monster::move = (x,y) ->
+  if Game.map(x,y) and Game.map(x,y).block isnt yes
+    @x = x; @y = y
