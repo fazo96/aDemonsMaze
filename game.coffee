@@ -148,12 +148,11 @@ Game =
 
   getEmptyLoc: (awayFromPlayer)->
     awayFromPlayer = awayFromPlayer or no
-    return unless @digger
-    r = undefined; ok = yes
-    while r is undefined or ok is no
-      rs = @digger.getRooms()
+    return unless @digger; rs = @digger.getRooms()
+    ok = no
+    while ok is no
       r = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
-      if awayFromPlayer is off or not r or @inRoom(r,@player.x,@player.y) is yes
+      if r and (awayFromPlayer is off or @inRoom(r,@player.x,@player.y) is no)
         ok = yes
     x = r.getLeft()
     + Math.floor ROT.RNG.getUniform() * (r.getRight() - r.getLeft())
@@ -322,7 +321,7 @@ Monster::act = ->
     # Standard behaviour: player has escaped or has not been found
     dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)]
     @move(@x+dir[0],@y+dir[1])
-    Game.scheduler.setDuration 20
+    Game.scheduler.setDuration 50
   else # Move towards known player position
     path = new ROT.Path.Dijkstra @p_x, @p_y, (x,y) =>
       # TODO: Every door considered open until seen closed
@@ -332,7 +331,7 @@ Monster::act = ->
     tx = @x; ty = @y # workaround, it works and it's efficient! I hope...
     path.compute tx, ty, (x,y) =>
       if Math.abs(tx-x) < 2 and Math.abs(ty-y) < 2 then @move x, y
-    Game.scheduler.setDuration 15
+    Game.scheduler.setDuration 35
   Game.scheduler.next().act()
 
 Monster::move = (x,y) ->

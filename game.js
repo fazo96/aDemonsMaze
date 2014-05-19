@@ -207,12 +207,11 @@ Game = {
     if (!this.digger) {
       return;
     }
-    r = void 0;
-    ok = true;
-    while (r === void 0 || ok === false) {
-      rs = this.digger.getRooms();
+    rs = this.digger.getRooms();
+    ok = false;
+    while (ok === false) {
       r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
-      if (awayFromPlayer === false || !r || this.inRoom(r, this.player.x, this.player.y) === true) {
+      if (r && (awayFromPlayer === false || this.inRoom(r, this.player.x, this.player.y) === false)) {
         ok = true;
       }
     }
@@ -479,7 +478,7 @@ Monster.prototype.act = function() {
   if (this.p_x === false && this.p_y === false) {
     dir = ROT.DIRS[8][Math.floor(ROT.RNG.getUniform() * 7)];
     this.move(this.x + dir[0], this.y + dir[1]);
-    Game.scheduler.setDuration(20);
+    Game.scheduler.setDuration(50);
   } else {
     path = new ROT.Path.Dijkstra(this.p_x, this.p_y, (function(_this) {
       return function(x, y) {
@@ -498,7 +497,7 @@ Monster.prototype.act = function() {
         }
       };
     })(this));
-    Game.scheduler.setDuration(15);
+    Game.scheduler.setDuration(35);
   }
   return Game.scheduler.next().act();
 };
