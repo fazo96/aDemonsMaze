@@ -61,7 +61,7 @@ Game =
     # Generate Monsters
     if not @monsters[l]
       @monsters[l] = []
-      times = Math.floor(ROT.RNG.getUniform() * 5)
+      times = Math.floor(ROT.RNG.getUniform() * 7)
       console.log "Generating " + (times+1) + " monsters on floor "+l
       for i in [1..times]
         loc = @getEmptyLoc yes
@@ -128,9 +128,9 @@ Game =
     @player.drawMemory()
     @player.drawVisible()
     @camera.draw @player.x, @player.y, '@', "#fff", "#aa0"
-    # Draw Monsters
+    # Draw Monsters (Debug)
     #for monster in @monsters[@level]
-      #@display.draw monster.x, monster.y, 'M', "#fff", "#000"
+      #@camera.draw monster.x, monster.y, 'M', "#fff", "#000"
 
   inRoom : (room, x, y) ->
     if room then room.x1 <= x <= room.x2 and room.y1 <= y <= room.y2 else no
@@ -323,10 +323,13 @@ Monster::act = ->
     @move(@x+dir[0],@y+dir[1])
     Game.scheduler.setDuration 20
   else # Move towards known player position
-    path = new ROT.Path.AStar @p_x, @p_y, (x,y) =>
+    path = new ROT.Path.Dijkstra @p_x, @p_y, (x,y) =>
+      if @x is x and @y is y
+        return yes
       Game.isBlocked(x, y,@z,no) is no
     tx = @x; ty = @y # workaround, it works and it's efficient! I hope...
     path.compute tx, ty, (x,y) =>
+      console.log "Path"
       if Math.abs(tx-x) < 2 and Math.abs(ty-y) < 2
         @move x, y
     Game.scheduler.setDuration 15
@@ -334,13 +337,13 @@ Monster::act = ->
 
 Monster::move = (x,y) ->
   return unless Game.map(x,y)
-  if Game.isBlocked x,y,@z,no
+  if Game.isBlocked(x,y,@z,no) is yes
     # Can't pass!
     if Game.map(x,y).type is "door" and @p_x isnt no and @p_y isnt no
       #Door Smashing. Not implemented yet
       console.log "Door Smash!"
   else if Math.abs(@x-x) < 2 and Math.abs(@y-y) < 2
-    @x = x; @y = y
+    @x = x; @y = y; Game.draw()
     # If I get to player's last known position and he's not there..
     if @x is @p_x and @y is @p_y
       @p_x = no; @p_y = no

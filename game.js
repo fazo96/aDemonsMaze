@@ -66,7 +66,7 @@ Game = {
     Game.camera.setCenter(this.player.x, this.player.y);
     if (!this.monsters[l]) {
       this.monsters[l] = [];
-      times = Math.floor(ROT.RNG.getUniform() * 5);
+      times = Math.floor(ROT.RNG.getUniform() * 7);
       console.log("Generating " + (times + 1) + " monsters on floor " + l);
       for (i = _i = 1; 1 <= times ? _i <= times : _i >= times; i = 1 <= times ? ++_i : --_i) {
         loc = this.getEmptyLoc(true);
@@ -478,8 +478,11 @@ Monster.prototype.act = function() {
     this.move(this.x + dir[0], this.y + dir[1]);
     Game.scheduler.setDuration(20);
   } else {
-    path = new ROT.Path.AStar(this.p_x, this.p_y, (function(_this) {
+    path = new ROT.Path.Dijkstra(this.p_x, this.p_y, (function(_this) {
       return function(x, y) {
+        if (_this.x === x && _this.y === y) {
+          return true;
+        }
         return Game.isBlocked(x, y, _this.z, false) === false;
       };
     })(this));
@@ -487,6 +490,7 @@ Monster.prototype.act = function() {
     ty = this.y;
     path.compute(tx, ty, (function(_this) {
       return function(x, y) {
+        console.log("Path");
         if (Math.abs(tx - x) < 2 && Math.abs(ty - y) < 2) {
           return _this.move(x, y);
         }
@@ -501,13 +505,14 @@ Monster.prototype.move = function(x, y) {
   if (!Game.map(x, y)) {
     return;
   }
-  if (Game.isBlocked(x, y, this.z, false)) {
+  if (Game.isBlocked(x, y, this.z, false) === true) {
     if (Game.map(x, y).type === "door" && this.p_x !== false && this.p_y !== false) {
       return console.log("Door Smash!");
     }
   } else if (Math.abs(this.x - x) < 2 && Math.abs(this.y - y) < 2) {
     this.x = x;
     this.y = y;
+    Game.draw();
     if (this.x === this.p_x && this.y === this.p_y) {
       this.p_x = false;
       return this.p_y = false;
