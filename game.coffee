@@ -296,13 +296,14 @@ Player::drawVisible = ->
     # Check for Monsters
     for monster in Game.monsters[Game.level]
       if monster.x is x and monster.y is y
-        Game.camera.draw x, y, "M",
-          Game.map(x,y).fg_light,
+        Game.camera.draw x, y, monster.val,
+          monster.fg_light,
           Game.map(x,y).bg_light
 
-Monster = (x,y,level) ->
+Monster = (x,y,level,val,fg,fg_light) ->
   @x = x; @y = y; @z = level
-  @p_x = no; @p_y = no
+  @p_x = no; @p_y = no; @val = val or "M"
+  @fg = fg or "#fff"; @fg_light = fg_light or "#fff"
 
 Monster::act = ->
   return unless @z is Game.level
@@ -324,14 +325,13 @@ Monster::act = ->
     Game.scheduler.setDuration 20
   else # Move towards known player position
     path = new ROT.Path.Dijkstra @p_x, @p_y, (x,y) =>
+      # TODO: Every door considered open until seen closed
       if @x is x and @y is y
         return yes
       Game.isBlocked(x, y,@z,no) is no
     tx = @x; ty = @y # workaround, it works and it's efficient! I hope...
     path.compute tx, ty, (x,y) =>
-      console.log "Path"
-      if Math.abs(tx-x) < 2 and Math.abs(ty-y) < 2
-        @move x, y
+      if Math.abs(tx-x) < 2 and Math.abs(ty-y) < 2 then @move x, y
     Game.scheduler.setDuration 15
   Game.scheduler.next().act()
 

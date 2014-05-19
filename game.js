@@ -430,7 +430,7 @@ Player.prototype.drawVisible = function() {
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       monster = _ref[_i];
       if (monster.x === x && monster.y === y) {
-        _results.push(Game.camera.draw(x, y, "M", Game.map(x, y).fg_light, Game.map(x, y).bg_light));
+        _results.push(Game.camera.draw(x, y, monster.val, monster.fg_light, Game.map(x, y).bg_light));
       } else {
         _results.push(void 0);
       }
@@ -439,12 +439,15 @@ Player.prototype.drawVisible = function() {
   });
 };
 
-Monster = function(x, y, level) {
+Monster = function(x, y, level, val, fg, fg_light) {
   this.x = x;
   this.y = y;
   this.z = level;
   this.p_x = false;
-  return this.p_y = false;
+  this.p_y = false;
+  this.val = val || "M";
+  this.fg = fg || "#fff";
+  return this.fg_light = fg_light || "#fff";
 };
 
 Monster.prototype.act = function() {
@@ -490,7 +493,6 @@ Monster.prototype.act = function() {
     ty = this.y;
     path.compute(tx, ty, (function(_this) {
       return function(x, y) {
-        console.log("Path");
         if (Math.abs(tx - x) < 2 && Math.abs(ty - y) < 2) {
           return _this.move(x, y);
         }
