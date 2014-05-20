@@ -6,13 +6,15 @@ Game =
   h: 50
   screen_w: 80
   screen_h: 25
+  camera_w: 80
+  camera_h: 23
   debug: no
   maps: []
   monsters: []
 
   init: ->
     console.log "A Demon's Maze - WIP"
-    if ROT.isSupported() is no
+    if ROT.isSupported() is no # Can't play.
       document.getElementById("gameContainer").innerHTML = """
       <h3>Oh! Your browser does not support HTML5 Canvas!</h3>
       <p>Try Firefox or Chrome!</p>
@@ -21,12 +23,15 @@ Game =
     # Init
     @display = new ROT.Display { width: @screen_w, height: @screen_h }
     document.getElementById("gameContainer").appendChild @display.getContainer()
+    @newGame()
+    console.log "Done init"
+
+  newGame: ->
     @scheduler = new ROT.Scheduler.Action()
-    @level = 0
-    @camera = new Camera 0,0,@screen_w,@screen_h
+    @level = 0; @maps = []; @monsters = []; @player = undefined
+    @camera = new Camera 0,0,@camera_w,@camera_h
     @newLevel 0
     @scheduler.next().act()
-    console.log "Done init"
 
   newLevel: (l,moveTo) ->
     moveTo = moveTo or yes
@@ -119,6 +124,23 @@ Game =
         @camera.draw key.split(",")[0], key.split(",")[1],
           @maps[@level][key].val, @maps[@level][key].fg, @maps[@level][key].bg
 
+  drawUI: () ->
+    # Separator
+    s = ""; s += "_" for i in [1..@camera_w]
+    @display.drawText 0, @camera_h, s
+    # Player HP
+    if @player.hp > 0
+      @display.drawText 0, @camera_h+1, "HP "
+      for i in [1..10]
+        @display.draw 2+i,@camera_h+1, "=", "#a00", "#000"
+      for i in [1..Math.floor @player.hp / 10]
+        @display.draw 2+i,@camera_h+1, "=", "#f00", "#000"
+    else @display.drawText 0,@camera_h+1, "Game Over! Press Enter"
+    # Other
+    @display.drawText @screen_w-9, @camera_h+1, "Floor: "+@level
+    @display.drawText 15,@camera_h+1,"Ouch!" unless @player.hp is @player.oldHp
+    @player.oldHp = @player.hp
+
   draw : ->
     if not @map_done
       # Map has to be finished
@@ -128,6 +150,7 @@ Game =
     @player.drawMemory()
     @player.drawVisible()
     @camera.draw @player.x, @player.y, '@', "#fff", "#aa0"
+    @drawUI()
     # Draw Monsters (Debug)
     #for monster in @monsters[@level]
       #@camera.draw monster.x, monster.y, 'M', "#fff", "#000"
@@ -147,18 +170,19 @@ Game =
     no
 
   getEmptyLoc: (awayFromPlayer)->
-    awayFromPlayer = awayFromPlayer or no
+    awayFromPlayer = awayFromPlayer or yes
     return unless @digger; rs = @digger.getRooms()
-    ok = no
-    while ok is no
-      r = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
-      if r and (awayFromPlayer is off or @inRoom(r,@player.x,@player.y) is no)
-        ok = yes
-    x = r.getLeft()
-    + Math.floor ROT.RNG.getUniform() * (r.getRight() - r.getLeft())
-    y = r.getTop()
-    + Math.floor ROT.RNG.getUniform() * (r.getBottom() - r.getTop())
-    return {x,y}
+    loop
+      ok = no
+      while ok is no
+        r = rs[Math.floor(ROT.RNG.getUniform() * @digger.getRooms().length - 1)]
+        if not @player or awayFromPlayer is off or @inRoom(r,@player.x,@player.y) is no
+          if r then ok = yes
+      x = r.getLeft()
+      + Math.floor ROT.RNG.getUniform() * (r.getRight() - r.getLeft())
+      y = r.getTop()
+      + Math.floor ROT.RNG.getUniform() * (r.getBottom() - r.getTop())
+      return {x,y} unless @player and @player.x is x and @player.y is y
 
 Camera = (x,y,w,h) ->
   @x = x; @y = y; @w = w; @h = h
@@ -182,11 +206,10 @@ Camera::visible = (x,y) ->
   x > @x and x < @x+@w and y > @y and y < @y+@h
 
 Camera::draw = (x,y,ch,fg,bg) ->
-  Game.display.draw x-@x,y-@y,ch,fg,bg #unless @visible x,y is no
+  Game.display.draw x-@x,y-@y,ch,fg,bg
 
 Player = (x,y) ->
-  @x = x
-  @y = y
+  @x = x; @y = y; @hp = 100; @oldHp = 100; @reqEnter = no
   @shiftDown = no; @closeDoor = no
   @move @x, @y
   @pos = {}
@@ -205,6 +228,10 @@ Player = (x,y) ->
   window.addEventListener "keyup", @_onKeyUp
 
 Player::act = ->
+  if @hp <= 0
+    #Game.display.drawText 15,@camera_h+1,"Game Over!"
+    Game.draw() unless @reqEnter is yes
+    @reqEnter = yes
   window.addEventListener "keydown", @_onKeyDown
 
 Player::onKeyUp = (e) ->
@@ -215,6 +242,13 @@ Player::onKeyDown = (e) ->
   finished = no
   console.log "Keycode: "+e.keyCode
   # start actions --->
+  if @reqEnter is yes
+    if e.keyCode is 13
+      if @hp <= 0
+        Game.newGame()
+      finished = yes
+    else finished = no
+    return
   if e.keyCode is 16 # Shift
     @shiftDown = yes
   else if e.keyCode is 67 # c
@@ -336,16 +370,20 @@ Monster::act = ->
 
 Monster::move = (x,y) ->
   return unless Game.map(x,y)
-  if Game.isBlocked(x,y,@z,no) is yes
+  if Game.isBlocked(x,y,@z,yes) is yes
     # Can't pass!
     if Game.map(x,y).type is "door" and @p_x isnt no and @p_y isnt no
-      #Door Smashing. Not implemented yet
+      # Door Smashing. Not implemented yet
       console.log "Door Smash!"
   else if Math.abs(@x-x) < 2 and Math.abs(@y-y) < 2
-    @x = x; @y = y; Game.draw()
-    # If I get to player's last known position and he's not there..
-    if @x is @p_x and @y is @p_y
-      @p_x = no; @p_y = no
+    if x is Game.player.x and y is Game.player.y
+      Game.player.hp -= 20
+    else
+      @x = x; @y = y
+      # If I get to player's last known position and he's not there..
+      if @x is @p_x and @y is @p_y
+        @p_x = no; @p_y = no
+  Game.draw()
 
 # Start the gameeee
 Game.init()

@@ -9,6 +9,8 @@ Game = {
   h: 50,
   screen_w: 80,
   screen_h: 25,
+  camera_w: 80,
+  camera_h: 23,
   debug: false,
   maps: [],
   monsters: [],
@@ -23,12 +25,18 @@ Game = {
       height: this.screen_h
     });
     document.getElementById("gameContainer").appendChild(this.display.getContainer());
+    this.newGame();
+    return console.log("Done init");
+  },
+  newGame: function() {
     this.scheduler = new ROT.Scheduler.Action();
     this.level = 0;
-    this.camera = new Camera(0, 0, this.screen_w, this.screen_h);
+    this.maps = [];
+    this.monsters = [];
+    this.player = void 0;
+    this.camera = new Camera(0, 0, this.camera_w, this.camera_h);
     this.newLevel(0);
-    this.scheduler.next().act();
-    return console.log("Done init");
+    return this.scheduler.next().act();
   },
   newLevel: function(l, moveTo) {
     var i, loc, loc2, monster, oldLevel, times, _i, _j, _k, _len, _len1, _ref, _ref1;
@@ -158,6 +166,30 @@ Game = {
     }
     return _results;
   },
+  drawUI: function() {
+    var i, s, _i, _j, _k, _ref, _ref1;
+    s = "";
+    for (i = _i = 1, _ref = this.camera_w; 1 <= _ref ? _i <= _ref : _i >= _ref; i = 1 <= _ref ? ++_i : --_i) {
+      s += "_";
+    }
+    this.display.drawText(0, this.camera_h, s);
+    if (this.player.hp > 0) {
+      this.display.drawText(0, this.camera_h + 1, "HP ");
+      for (i = _j = 1; _j <= 10; i = ++_j) {
+        this.display.draw(2 + i, this.camera_h + 1, "=", "#a00", "#000");
+      }
+      for (i = _k = 1, _ref1 = Math.floor(this.player.hp / 10); 1 <= _ref1 ? _k <= _ref1 : _k >= _ref1; i = 1 <= _ref1 ? ++_k : --_k) {
+        this.display.draw(2 + i, this.camera_h + 1, "=", "#f00", "#000");
+      }
+    } else {
+      this.display.drawText(0, this.camera_h + 1, "Game Over! Press Enter");
+    }
+    this.display.drawText(this.screen_w - 9, this.camera_h + 1, "Floor: " + this.level);
+    if (this.player.hp !== this.player.oldHp) {
+      this.display.drawText(15, this.camera_h + 1, "Ouch!");
+    }
+    return this.player.oldHp = this.player.hp;
+  },
   draw: function() {
     if (!this.map_done) {
       return;
@@ -165,7 +197,8 @@ Game = {
     this.display.clear();
     this.player.drawMemory();
     this.player.drawVisible();
-    return this.camera.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
+    this.camera.draw(this.player.x, this.player.y, '@', "#fff", "#aa0");
+    return this.drawUI();
   },
   inRoom: function(room, x, y) {
     if (room) {
@@ -203,26 +236,32 @@ Game = {
   },
   getEmptyLoc: function(awayFromPlayer) {
     var ok, r, rs, x, y;
-    awayFromPlayer = awayFromPlayer || false;
+    awayFromPlayer = awayFromPlayer || true;
     if (!this.digger) {
       return;
     }
     rs = this.digger.getRooms();
-    ok = false;
-    while (ok === false) {
-      r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
-      if (r && (awayFromPlayer === false || this.inRoom(r, this.player.x, this.player.y) === false)) {
-        ok = true;
+    while (true) {
+      ok = false;
+      while (ok === false) {
+        r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
+        if (!this.player || awayFromPlayer === false || this.inRoom(r, this.player.x, this.player.y) === false) {
+          if (r) {
+            ok = true;
+          }
+        }
+      }
+      x = r.getLeft();
+      +Math.floor(ROT.RNG.getUniform() * (r.getRight() - r.getLeft()));
+      y = r.getTop();
+      +Math.floor(ROT.RNG.getUniform() * (r.getBottom() - r.getTop()));
+      if (!(this.player && this.player.x === x && this.player.y === y)) {
+        return {
+          x: x,
+          y: y
+        };
       }
     }
-    x = r.getLeft();
-    +Math.floor(ROT.RNG.getUniform() * (r.getRight() - r.getLeft()));
-    y = r.getTop();
-    +Math.floor(ROT.RNG.getUniform() * (r.getBottom() - r.getTop()));
-    return {
-      x: x,
-      y: y
-    };
   }
 };
 
@@ -276,6 +315,9 @@ Camera.prototype.draw = function(x, y, ch, fg, bg) {
 Player = function(x, y) {
   this.x = x;
   this.y = y;
+  this.hp = 100;
+  this.oldHp = 100;
+  this.reqEnter = false;
   this.shiftDown = false;
   this.closeDoor = false;
   this.move(this.x, this.y);
@@ -295,6 +337,12 @@ Player = function(x, y) {
 };
 
 Player.prototype.act = function() {
+  if (this.hp <= 0) {
+    if (this.reqEnter !== true) {
+      Game.draw();
+    }
+    this.reqEnter = true;
+  }
   return window.addEventListener("keydown", this._onKeyDown);
 };
 
@@ -308,6 +356,17 @@ Player.prototype.onKeyDown = function(e) {
   var blocked, dir, finished, newX, newY, _ref, _ref1;
   finished = false;
   console.log("Keycode: " + e.keyCode);
+  if (this.reqEnter === true) {
+    if (e.keyCode === 13) {
+      if (this.hp <= 0) {
+        Game.newGame();
+      }
+      finished = true;
+    } else {
+      finished = false;
+    }
+    return;
+  }
   if (e.keyCode === 16) {
     this.shiftDown = true;
   } else if (e.keyCode === 67) {
@@ -506,19 +565,23 @@ Monster.prototype.move = function(x, y) {
   if (!Game.map(x, y)) {
     return;
   }
-  if (Game.isBlocked(x, y, this.z, false) === true) {
+  if (Game.isBlocked(x, y, this.z, true) === true) {
     if (Game.map(x, y).type === "door" && this.p_x !== false && this.p_y !== false) {
-      return console.log("Door Smash!");
+      console.log("Door Smash!");
     }
   } else if (Math.abs(this.x - x) < 2 && Math.abs(this.y - y) < 2) {
-    this.x = x;
-    this.y = y;
-    Game.draw();
-    if (this.x === this.p_x && this.y === this.p_y) {
-      this.p_x = false;
-      return this.p_y = false;
+    if (x === Game.player.x && y === Game.player.y) {
+      Game.player.hp -= 20;
+    } else {
+      this.x = x;
+      this.y = y;
+      if (this.x === this.p_x && this.y === this.p_y) {
+        this.p_x = false;
+        this.p_y = false;
+      }
     }
   }
+  return Game.draw();
 };
 
 Game.init();
