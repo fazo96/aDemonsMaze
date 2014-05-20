@@ -256,13 +256,13 @@ Player::onKeyDown = (e) ->
   if e.keyCode is 101 or e.keyCode is 190 # dor symbol or Numpad 5: wait
     finished = yes # Do nothing, pass turn
     Game.scheduler.setDuration 5
-  if e.keyCode is 60 and Game.map(@x,@y).type is "stairs"
-    if Game.map(@x,@y).val is ">" and @shiftDown
+  if (e.keyCode is 60 or e.keyCode is 83) and Game.map(@x,@y).type is "stairs"
+    if Game.map(@x,@y).val is ">" and (@shiftDown or e.keyCode is 83)
       # Go downstairs
       @pos[Game.level] = { x: @x, y: @y }
       Game.newLevel Game.level - 1
       finished = yes
-    else if Game.map(@x,@y).val is "<" and not @shiftDown
+    else if Game.map(@x,@y).val is "<" and (not @shiftDown or e.keyCode is 83)
       # Go upstairs
       @pos[Game.level] = { x: @x, y: @y }
       Game.newLevel Game.level + 1

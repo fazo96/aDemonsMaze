@@ -376,15 +376,15 @@ Player.prototype.onKeyDown = function(e) {
     finished = true;
     Game.scheduler.setDuration(5);
   }
-  if (e.keyCode === 60 && Game.map(this.x, this.y).type === "stairs") {
-    if (Game.map(this.x, this.y).val === ">" && this.shiftDown) {
+  if ((e.keyCode === 60 || e.keyCode === 83) && Game.map(this.x, this.y).type === "stairs") {
+    if (Game.map(this.x, this.y).val === ">" && (this.shiftDown || e.keyCode === 83)) {
       this.pos[Game.level] = {
         x: this.x,
         y: this.y
       };
       Game.newLevel(Game.level - 1);
       finished = true;
-    } else if (Game.map(this.x, this.y).val === "<" && !this.shiftDown) {
+    } else if (Game.map(this.x, this.y).val === "<" && (!this.shiftDown || e.keyCode === 83)) {
       this.pos[Game.level] = {
         x: this.x,
         y: this.y
