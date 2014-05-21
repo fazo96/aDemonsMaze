@@ -7,6 +7,7 @@ Array.prototype["delete"] = function(o) {
 Game = {
   w: 50,
   h: 50,
+  level: 0,
   screen_w: 80,
   screen_h: 25,
   camera_w: 80,
@@ -38,6 +39,12 @@ Game = {
     this.newLevel(0);
     return this.scheduler.next().act();
   },
+
+  /*
+  Cretes a new level if it's not generated yet
+  l: which level
+  moveTo: move the player to the level
+   */
   newLevel: function(l, moveTo) {
     var i, loc, loc2, monster, oldLevel, times, _i, _j, _k, _len, _len1, _ref, _ref1;
     moveTo = moveTo || true;
@@ -234,9 +241,9 @@ Game = {
     }
     return false;
   },
-  getEmptyLoc: function(awayFromPlayer) {
+  getEmptyLoc: function(away) {
     var ok, r, rs, x, y;
-    awayFromPlayer = awayFromPlayer || true;
+    away = away || true;
     if (!this.digger) {
       return;
     }
@@ -245,7 +252,7 @@ Game = {
       ok = false;
       while (ok === false) {
         r = rs[Math.floor(ROT.RNG.getUniform() * this.digger.getRooms().length - 1)];
-        if (!this.player || awayFromPlayer === false || this.inRoom(r, this.player.x, this.player.y) === false) {
+        if (!this.player || away === false || this.inRoom(r, this.player.x, this.player.y) === false) {
           if (r) {
             ok = true;
           }
