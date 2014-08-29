@@ -129,8 +129,8 @@ Game =
     console.log "[Map:"+l+"] Finished"
 
   # Get coordinates, uses current player level (@level)
-  map : (x,y) ->
-    @maps[@level][x+","+y]
+  map : (x,y,lev) ->
+    @maps[lev or @level][x+","+y]
 
   drawMap : (onlySeen) ->
     onlySeen = onlySeen or no
@@ -178,8 +178,8 @@ Game =
 
   isBlocked : (x,y,l,ignorePlayer) ->
     l = l or @level; ignorePlayer = ignorePlayer or no
-    if not @map(x,y) then return yes
-    if @map(x,y).block is yes then return yes
+    if not @map(x,y,l) then return yes
+    if @map(x,y,l).block is yes then return yes
     if ignorePlayer is no
       if @player.x is x and @player.y is y and @level is l then return yes
     return no unless @monsters and @monsters[l]
