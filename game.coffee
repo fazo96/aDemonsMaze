@@ -432,7 +432,7 @@ Monster::move = (x,y) ->
     # Tile is not blocked and it's near enough to move there
     if x is Game.player.x and y is Game.player.y
       # Hit the player!
-      Game.player.hp -= 5 + Math.floor ROT.RNG.getUniform() * 20
+      Game.player.hp -= 5 + Math.floor(ROT.RNG.getUniform() * 20)
     else
       # Move there
       @x = x; @y = y
