@@ -1,3 +1,6 @@
+# This is A Demon's Maze main game file.
+# Please look for a LICENSE.txt file in this folder for licensing information.
+
 # Utility function. Needed!
 Array::delete = (o) ->
   @splice @indexOf(o), 1
@@ -75,11 +78,13 @@ Game =
     # Generate Monsters
     if not @monsters[l]
       @monsters[l] = []
-      times = Math.floor(ROT.RNG.getUniform() * 7)
-      console.log "Generating " + (times+1) + " monsters on floor "+l
-      for i in [1..times]
-        loc = @getEmptyLoc yes
-        @monsters[l].push new Monster(loc.x, loc.y, l)
+      times = Math.floor l * 1.5 + ROT.RNG.getUniform() * 6 - 3
+      if times > 15 then times = 15
+      console.log "Generating " + times + " monsters on floor "+l
+      if times > 0
+        for i in [1..times]
+          loc = @getEmptyLoc yes
+          @monsters[l].push new Monster(loc.x, loc.y, l)
     if moveTo # Change level
       console.log "Player moving to level "+l
       # Stop old monsters' AI for now
@@ -237,8 +242,7 @@ Player = (x,y) ->
   @x = x; @y = y; @hp = 100; @oldHp = 100; @reqEnter = no
   @shiftDown = no; @closeDoor = no
   @move @x, @y
-  @pos = {}
-  @keyMap = {}
+  @pos = {}; @keyMap = {}; @sounds = []
   @keyMap[38] = @keyMap[104] = 0 # up
   @keyMap[33] = @keyMap[105] = 1
   @keyMap[39] = @keyMap[102] = 2 # right
@@ -268,7 +272,7 @@ Player::onKeyUp = (e) ->
 # Callback for keyboard key pressed event
 Player::onKeyDown = (e) ->
   finished = no
-  console.log "Keycode: "+e.keyCode
+  #console.log "Keycode: "+e.keyCode
   # start possible actions --->
   if @reqEnter is yes
     if e.keyCode is 13
@@ -296,7 +300,7 @@ Player::onKeyDown = (e) ->
       Game.newLevel Game.level + 1
       finished = yes
     if finished is yes then Game.scheduler.setDuration 5
-  else if 36 <= e.keyCode <= 40 or 97 <= e.keyCode <= 105 and @closeDoor is no
+  else if 36 <= e.keyCode <= 40 or 97 <= e.keyCode <= 105
     # Direction Key
     dir = ROT.DIRS[8][@keyMap[e.keyCode]]
     if dir
@@ -351,6 +355,12 @@ Player::drawVisible = ->
   if not @fov
     @fov = new ROT.FOV.PreciseShadowcasting (x,y) ->
       Game.isBlocked(x,y,Game.level,yes) is no
+
+  # Draw heard sounds
+  for s in @sounds
+    Game.camera.draw s.x, s.y, s.val, s.light
+  @sounds = []
+
   @fov.compute @x, @y, 6, (x, y, r, v) ->
     return unless Game.map(x,y)
     Game.map(x,y).seen = yes
@@ -398,7 +408,8 @@ Monster::act = ->
       # TODO: Every door considered open until seen closed
       if @x is x and @y is y
         return yes
-      Game.isBlocked(x, y,@z,no) is no
+      block = Game.isBlocked(x, y,@z,no)
+      !block or Game.map(x,y).val is '+'
     tx = @x; ty = @y # workaround, it works and it's efficient! I hope...
     path.compute tx, ty, (x,y) =>
       # Compute path, then move
@@ -413,12 +424,15 @@ Monster::move = (x,y) ->
     # Can't pass, the tile is blocked
     if Game.map(x,y).type is "door" and @p_x isnt no and @p_y isnt no
       # TODO: smash down the door. Not implemented yet
-      console.log "Door Smash!"
+      Game.map(x,y).val = "x"
+      if ROT.RNG.getPercentage() > 75 - 2 * Game.level
+        Game.map(x,y).val = " "; Game.map(x,y).block = no
+        Game.map(x,y).type = "floor"
   else if Math.abs(@x-x) < 2 and Math.abs(@y-y) < 2
     # Tile is not blocked and it's near enough to move there
     if x is Game.player.x and y is Game.player.y
       # Hit the player!
-      Game.player.hp -= 20
+      Game.player.hp -= 5 + Math.floor ROT.RNG.getUniform() * 20
     else
       # Move there
       @x = x; @y = y
